@@ -41,12 +41,50 @@ const STATUSES=["Draft","Scheduled","Published"];
 const FEED_SOURCES=[
   {name:"Checkmarx",url:"https://checkmarx.com/feed/",tag:"AppSec"},
   {name:"PortSwigger",url:"https://portswigger.net/daily-swig/rss",tag:"Web Security"},
-  {name:"OWASP",url:"https://owasp.org/feed.xml",tag:"OWASP"},
   {name:"Dark Reading",url:"https://www.darkreading.com/rss.xml",tag:"Threat Intel"},
   {name:"Krebs on Security",url:"https://krebsonsecurity.com/feed/",tag:"Breaches"},
   {name:"The Hacker News",url:"https://feeds.feedburner.com/TheHackersNews",tag:"CVE/News"},
+  {name:"SANS",url:"https://isc.sans.edu/rssfeed_full.xml",tag:"SANS ISC"},
 ];
-const RSS_PROXY=url=>`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=3`;
+
+// Multiple proxy fallbacks
+function makeProxyUrls(feedUrl){
+  return [
+    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=3&api_key=`,
+    `https://cors-anywhere.herokuapp.com/${feedUrl}`,
+    `https://thingproxy.freeboard.io/fetch/${feedUrl}`,
+  ];
+}
+
+async function fetchOneFeed(src){
+  // Try rss2json first (most reliable)
+  try{
+    const r=await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=3`,{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    if(d.status==="ok"&&d.items?.length){
+      return d.items.slice(0,3).map(i=>({
+        title:(i.title||"").trim(),
+        link:i.link||i.url||"",
+        summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
+        date:i.pubDate||i.published||"",
+        source:src.name,tag:src.tag,
+      })).filter(i=>i.title);
+    }
+  }catch(e){}
+
+  // Fallback: AllOrigins proxy (raw XML parse)
+  try{
+    const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    const xml=d.contents||"";
+    const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+    return items.slice(0,3).map(m=>{
+      const get=(tag)=>{const x=m[1].match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));return x?((x[1]||x[2]||"").trim()):""};
+      return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
+    }).filter(i=>i.title);
+  }catch(e){}
+  return [];
+}
 
 const sampleContacts=[
   {id:1,name:"Priya Sharma",role:"CISO",company:"CloudShield",industry:"Cybersecurity",strength:"Strong",followUp:"2026-03-18",birthday:"1988-07-15",workAnniversary:"2020-03-01",notes:"Met at Black Hat 2025",tags:["AppSec","CISO"]},
@@ -75,28 +113,11 @@ function getCelebrations(contacts){
   return ev.sort((a,b)=>a.days-b.days);
 }
 
-// Fetch all RSS feeds in parallel
+// Fetch all RSS feeds in parallel with dual-proxy fallback
 async function fetchAllTopics(){
-  const results=await Promise.allSettled(
-    FEED_SOURCES.map(async src=>{
-      try{
-        const r=await fetch(RSS_PROXY(src.url),{signal:AbortSignal.timeout(7000)});
-        const d=await r.json();
-        if(!d.items?.length)return [];
-        return d.items.slice(0,3).map(i=>({
-          title:i.title?.trim()||"",
-          link:i.link||i.url||"",
-          summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,400),
-          date:i.pubDate||i.published||"",
-          source:src.name,
-          tag:src.tag,
-        })).filter(i=>i.title);
-      }catch{return [];}
-    })
-  );
-  const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]);
-  if(!all.length)throw new Error("No articles fetched. Check internet connection.");
-  // Sort by date descending
+  const results=await Promise.allSettled(FEED_SOURCES.map(src=>fetchOneFeed(src)));
+  const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]).filter(a=>a.title);
+  if(!all.length)throw new Error("Could not fetch any topics.");
   return all.sort((a,b)=>new Date(b.date)-new Date(a.date));
 }
 
@@ -104,73 +125,65 @@ async function fetchAllTopics(){
 function buildMasterPrompt(selectedArticles){
   const today=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
   const articleBlock=selectedArticles.map((a,i)=>`
-ARTICLE ${i+1} — ${a.source} [${a.tag}]
+SOURCE ${i+1} — ${a.source} [${a.tag}]
 Title: ${a.title}
 Summary: ${a.summary}
 URL: ${a.link}
-Published: ${a.date?new Date(a.date).toLocaleDateString():"Recent"}
+Date: ${a.date?new Date(a.date).toLocaleDateString():"Recent"}
 `).join("\n---\n");
 
-  return `Today's date: ${today}
+  return `Today is ${today}.
 
 You are helping a senior cybersecurity leader write a LinkedIn post to build thought leadership in Application Security.
 
-AUTHOR PROFILE:
-- Strategic mindset: connects application security risks to business impact, board-level thinking
-- Educator: simplifies complex security concepts so both a CISO and a junior developer can understand
-- Practitioner credibility: speaks from experience, not theory
-- Tone: measured, confident, authoritative — no hype, no clichés, no cheerleading
-- Writing style: short paragraphs, plain English, no bullet points in the post itself, no emojis at all
-- Personal: uses "I", "we", "in my experience" — not generic third-person observations
+AUTHOR VOICE:
+- Strategic CISO perspective: connects AppSec risks directly to business impact and board-level decisions
+- Educator mindset: makes complex security concepts clear for both executives and engineers
+- Practitioner tone: measured, direct, no hype — writes from experience not theory
+- Uses "I", "we", "in my experience" — first person throughout
+- No emojis. No exclamation marks. No marketing language.
 
-SOURCE ARTICLES (use these as the foundation, but go further):
+SOURCE MATERIAL (use as foundation — go beyond with latest news):
 ${articleBlock}
 
-YOUR TASK — produce the following, clearly separated by headers:
-
 ---
+PRODUCE THE FOLLOWING — use these exact headers:
+
 ## LINKEDIN POST
 
-Rules:
-- Open with one sentence that makes a security professional stop scrolling. No question hooks. State something provocative or counterintuitive.
-- Write 4 short paragraphs. Each paragraph maximum 3 sentences.
-- Paragraph 1: The insight or problem — what is actually happening in the industry right now, grounded in the articles above but enriched with any other relevant developments from the past 7 days (new CVEs, breaches, vendor announcements, regulatory changes)
-- Paragraph 2: Why it matters from a business risk perspective — translate the technical into the boardroom
-- Paragraph 3: What most organisations are getting wrong, or what the conventional wisdom misses
-- Paragraph 4: What good looks like — a practical, honest recommendation. Not a sales pitch. Something actionable.
-- End with: 3 hashtags only, on a new line, no spaces between them: #ApplicationSecurity #CyberSecurity #AppSec
-- No emojis anywhere. No bold text. No bullet points. No headers inside the post.
-- Total length: 250 to 350 words maximum.
+Write the post following these rules:
+- Open with one short, bold statement that challenges conventional thinking — not a question
+- Write exactly 4 paragraphs, maximum 3 sentences each, no bullet points inside the post
+- Paragraph 1: What is actually happening in AppSec right now — ground it in the sources above AND any relevant CVEs, breaches, or announcements from the past 14 days
+- Paragraph 2: Why this matters at a business and board level — translate technical risk into financial or reputational exposure
+- Paragraph 3: What most security teams are getting wrong or overlooking
+- Paragraph 4: What good looks like — one practical, honest recommendation a practitioner can act on
+- Close with exactly 3 hashtags on a new line: #ApplicationSecurity #CyberSecurity #AppSec
+- No emojis. No bold text inside the post. No bullet points. No headers inside the post.
+- Word count: 250 to 320 words
 
----
 ## THOUGHT LEADERSHIP QUOTE
 
-- One standalone quote, 2 sentences maximum
-- Must feel like something a practitioner with 15 years of experience would say
-- Attribute it as: — AppSec & Security Leader
-- No emojis
+- 2 sentences maximum
+- Should sound like something a 15-year security veteran would say — not a vendor tagline
+- Format exactly as: "Quote text here." — AppSec & Security Leader
 
----
 ## IMAGE GENERATION PROMPT
 
-Write a DALL-E image generation prompt for a professional LinkedIn visual that:
-- Reflects the theme of the post
-- Style: dark, cinematic, corporate — think Wired magazine cover meets enterprise security
-- No text, no logos, no people's faces
-- Suitable for a 1200x628 LinkedIn post image
-- Be specific about composition, lighting, and mood
+A DALL-E prompt for a LinkedIn post image:
+- Reflects the post theme
+- Style: dark, cinematic, Wired-magazine aesthetic — dramatic lighting, abstract or symbolic
+- No text, no faces, no logos
+- Dimensions: 1200 x 628 pixels landscape
+- Be specific: describe the exact scene, lighting, colour palette, and mood
+
+## POST TITLE
+
+One title for filing purposes — 10 words maximum, headline style
 
 ---
-## SUGGESTED POST TITLE
-
-One headline-style title for this post (for your own filing/schedule). Max 12 words.
-
----
-
-IMPORTANT REMINDERS:
-- Search your knowledge for any related news, CVE disclosures, breach reports, or security announcements from the past 14 days that are relevant to the topic. Do not rely only on the articles provided.
-- Write as the author, in first person. This is not a summary of the articles — it is a professional perspective informed by them.
-- If the articles are more than 2 weeks old, treat them as background context only and lead with what is current.`;
+IMPORTANT: Search your training knowledge for any AppSec, CVE, breach, or regulatory news from the past 14 days relevant to this topic. If the source articles are older than 2 weeks, treat them as context only and lead with what is current today.`;
+}
 }
 
 // ── Share via Android Share Sheet ────────────────────────────
@@ -328,16 +341,21 @@ function Topics({posts,setPosts}){
       </div>
 
       {/* What you get */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ChatGPT will produce</div>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">One ChatGPT response gives you all three:</div>
         {[
-          ["LinkedIn Post","250-350 words. No emojis. No bullet points. Professional, first-person, strategic-educator tone. Cross-referenced with latest 14-day news."],
-          ["Thought Leadership Quote","A standalone 2-sentence quote. Attribution ready. Suitable for a carousel or story."],
-          ["Image Generation Prompt","A detailed DALL-E prompt. Paste it into ChatGPT's image tab — no separate copy needed, it is in the same response."],
-        ].map(([t,d])=>(
-          <div key={t} className="flex gap-3 items-start">
-            <div className="w-1.5 h-1.5 bg-slate-400 rounded-full mt-1.5 shrink-0"/>
-            <div><span className="text-sm font-semibold text-gray-800">{t} — </span><span className="text-xs text-gray-500">{d}</span></div>
+          {n:"1",title:"LinkedIn Post",bullets:["250-320 words, 4 tight paragraphs","No emojis, no bullet points — clean prose","Grounded in your selected topics + last 14 days of AppSec news"]},
+          {n:"2",title:"Thought Leadership Quote",bullets:["2 sentences, practitioner voice","Ready to use as a carousel slide or story","Attribution included"]},
+          {n:"3",title:"Image Generation Prompt",bullets:["Detailed DALL-E prompt in the same response","Paste directly into ChatGPT's image tab","Dark, cinematic, LinkedIn-ready visual"]},
+        ].map(item=>(
+          <div key={item.n} className="border border-gray-100 rounded-xl p-3">
+            <div className="text-sm font-bold text-gray-800 mb-1.5">{item.n}. {item.title}</div>
+            {item.bullets.map((b,i)=>(
+              <div key={i} className="flex items-start gap-2 mb-1">
+                <div className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 shrink-0"/>
+                <div className="text-xs text-gray-500 leading-relaxed">{b}</div>
+              </div>
+            ))}
           </div>
         ))}
       </div>
