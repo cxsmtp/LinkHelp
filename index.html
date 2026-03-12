@@ -7,6 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-title" content="Li Manager"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
   <link rel="manifest" href="manifest.json"/>
   <title>LinkedIn Pro Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -57,32 +58,57 @@ function makeProxyUrls(feedUrl){
 }
 
 async function fetchOneFeed(src){
-  // Try rss2json first (most reliable)
+  // Try rss2json (most reliable CORS-friendly proxy)
   try{
-    const r=await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=3`,{signal:AbortSignal.timeout(8000)});
-    const d=await r.json();
-    if(d.status==="ok"&&d.items?.length){
-      return d.items.slice(0,3).map(i=>({
-        title:(i.title||"").trim(),
-        link:i.link||i.url||"",
-        summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
-        date:i.pubDate||i.published||"",
-        source:src.name,tag:src.tag,
-      })).filter(i=>i.title);
+    const url=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=3`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(9000),mode:"cors"});
+    if(r.ok){
+      const d=await r.json();
+      if(d.status==="ok"&&d.items?.length){
+        return d.items.slice(0,3).map(i=>({
+          title:(i.title||"").trim(),
+          link:i.link||i.url||"",
+          summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
+          date:i.pubDate||i.published||"",
+          source:src.name,tag:src.tag,
+        })).filter(i=>i.title);
+      }
     }
-  }catch(e){}
+  }catch(e){console.warn(`rss2json failed for ${src.name}:`,e);}
 
-  // Fallback: AllOrigins proxy (raw XML parse)
+  // Fallback: allorigins proxy
   try{
-    const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
-    const d=await r.json();
-    const xml=d.contents||"";
-    const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-    return items.slice(0,3).map(m=>{
-      const get=(tag)=>{const x=m[1].match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));return x?((x[1]||x[2]||"").trim()):""};
-      return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
-    }).filter(i=>i.title);
-  }catch(e){}
+    const url=`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(9000),mode:"cors"});
+    if(r.ok){
+      const d=await r.json();
+      const xml=d.contents||"";
+      const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0,3);
+      if(items.length){
+        return items.map(m=>{
+          const get=tag=>{const x=m[1].match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));return x?((x[1]||x[2]||"").trim()):""};
+          return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
+        }).filter(i=>i.title);
+      }
+    }
+  }catch(e){console.warn(`allorigins failed for ${src.name}:`,e);}
+
+  // Fallback 2: corsproxy.io
+  try{
+    const url=`https://corsproxy.io/?${encodeURIComponent(src.url)}`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(9000),mode:"cors"});
+    if(r.ok){
+      const xml=await r.text();
+      const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0,3);
+      if(items.length){
+        return items.map(m=>{
+          const get=tag=>{const x=m[1].match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));return x?((x[1]||x[2]||"").trim()):""};
+          return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
+        }).filter(i=>i.title);
+      }
+    }
+  }catch(e){console.warn(`corsproxy failed for ${src.name}:`,e);}
+
   return [];
 }
 
@@ -376,10 +402,41 @@ function Topics({posts,setPosts}){
       )}
 
       {status==="error"&&(
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
-          <div className="font-semibold text-red-700 text-sm">Could not fetch topics</div>
-          <div className="text-xs text-red-400 mt-1 mb-4">Check your internet connection and try again</div>
-          <button onClick={fetchTopics} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium">Retry</button>
+        <div className="space-y-3">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
+            <div className="font-semibold text-red-700 text-sm">Could not fetch live topics</div>
+            <div className="text-xs text-red-400 mt-1 mb-4">The RSS proxy services may be temporarily down. Try again or use a manual topic below.</div>
+            <button onClick={fetchTopics} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium">Retry</button>
+          </div>
+          {/* Manual fallback topics */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="font-semibold text-sm text-gray-700 mb-3">Or pick a manual topic to write about:</div>
+            <div className="space-y-2">
+              {[
+                {title:"AI-generated code is creating a new class of vulnerabilities that SAST tools weren't built for",source:"Manual",tag:"AppSec"},
+                {title:"The rise of API-first architectures is outpacing security team readiness",source:"Manual",tag:"AppSec"},
+                {title:"Why shift-left security is failing and what shift-everywhere actually means",source:"Manual",tag:"AppSec"},
+                {title:"Software supply chain attacks have doubled — and most organisations still lack an SBOM",source:"Manual",tag:"Supply Chain"},
+                {title:"LLM prompt injection is the SQL injection of 2025 — and we're repeating history",source:"Manual",tag:"AI Security"},
+              ].map((a,i)=>{
+                const isSel=selected.find(x=>x.title===a.title);
+                return(
+                  <button key={i} onClick={()=>toggleSelect({...a,link:"",summary:"",date:""})}
+                    className={`w-full text-left border rounded-xl p-3 transition ${isSel?"border-slate-800 bg-slate-50":"bg-white border-gray-200"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <Badge text={a.tag} color="indigo"/>
+                        <div className="font-medium text-sm text-gray-800 mt-1 leading-snug">{a.title}</div>
+                      </div>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${isSel?"bg-slate-800 border-slate-800 text-white":"border-gray-300"}`}>
+                        {isSel&&<span className="text-xs font-bold">{selected.findIndex(x=>x.title===a.title)+1}</span>}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
