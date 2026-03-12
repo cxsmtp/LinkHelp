@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <meta name="theme-color" content="#2563eb"/>
+  <meta name="theme-color" content="#1e293b"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-title" content="Li Manager"/>
@@ -15,13 +15,15 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;overscroll-behavior-y:none}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;overscroll-behavior-y:none}
     textarea,input,select{font-size:16px!important}
     ::-webkit-scrollbar{display:none}
     .safe-top{padding-top:env(safe-area-inset-top)}
     .safe-bottom{padding-bottom:env(safe-area-inset-bottom)}
     @keyframes spin{to{transform:rotate(360deg)}}
     .spin{animation:spin 1s linear infinite;display:inline-block}
+    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .fade{animation:fade 0.3s ease forwards}
   </style>
 </head>
 <body>
@@ -30,24 +32,30 @@
 const {useState,useEffect,useRef}=React;
 
 const APP_URL="https://cxsmtp.github.io/LinkHelp/";
-const TABS=["Dashboard","Auto-Blog","Contacts","Schedule","Celebrations"];
+const TABS=["Home","Topics","Contacts","Schedule","Events"];
 const STRENGTHS=["Strong","Warm","Cold"];
 const INDUSTRIES=["Tech","Cybersecurity","Sales","Fintech","Healthcare","SaaS","Other"];
 const STATUSES=["Draft","Scheduled","Published"];
-const RSS_PROXIES=[
-  url=>`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`,
-  url=>`https://rssproxy.migor.org/api/rss?url=${encodeURIComponent(url)}&out=json`,
+
+// Multiple RSS sources for wide topic coverage
+const FEED_SOURCES=[
+  {name:"Checkmarx",url:"https://checkmarx.com/feed/",tag:"AppSec"},
+  {name:"PortSwigger",url:"https://portswigger.net/daily-swig/rss",tag:"Web Security"},
+  {name:"OWASP",url:"https://owasp.org/feed.xml",tag:"OWASP"},
+  {name:"Dark Reading",url:"https://www.darkreading.com/rss.xml",tag:"Threat Intel"},
+  {name:"Krebs on Security",url:"https://krebsonsecurity.com/feed/",tag:"Breaches"},
+  {name:"The Hacker News",url:"https://feeds.feedburner.com/TheHackersNews",tag:"CVE/News"},
 ];
-const CHECKMARX_RSS="https://checkmarx.com/feed/";
+const RSS_PROXY=url=>`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=3`;
 
 const sampleContacts=[
   {id:1,name:"Priya Sharma",role:"CISO",company:"CloudShield",industry:"Cybersecurity",strength:"Strong",followUp:"2026-03-18",birthday:"1988-07-15",workAnniversary:"2020-03-01",notes:"Met at Black Hat 2025",tags:["AppSec","CISO"]},
-  {id:2,name:"Marcus Lee",role:"Sales Engineer",company:"Palo Alto Networks",industry:"Cybersecurity",strength:"Warm",followUp:"2026-03-22",birthday:"1990-03-20",workAnniversary:"2022-06-10",notes:"Interested in AppSec trends",tags:["AppSec","SE"]},
-  {id:3,name:"Ananya Iyer",role:"AppSec Lead",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Collaboration on AI threat modeling",tags:["AppSec","AI"]},
+  {id:2,name:"Marcus Lee",role:"AppSec Lead",company:"Palo Alto Networks",industry:"Cybersecurity",strength:"Warm",followUp:"2026-03-22",birthday:"1990-03-20",workAnniversary:"2022-06-10",notes:"Interested in AI threat modeling",tags:["AppSec","AI"]},
+  {id:3,name:"Ananya Iyer",role:"Head of Security Engineering",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Collaboration on zero trust architecture",tags:["AppSec","ZeroTrust"]},
 ];
 const samplePosts=[
-  {id:1,title:"How AI is Redefining Application Security in 2026",body:"AI is no longer just a tool for attackers...",status:"Published",date:"2026-03-05",topic:"AI & Application Security"},
-  {id:2,title:"Zero Trust in the Age of AI-Powered Threats",body:"The perimeter is dead. Here's what's replacing it...",status:"Scheduled",date:"2026-03-14",topic:"AI & Application Security"},
+  {id:1,title:"The Hidden Cost of Insecure Code in the Age of AI",body:"Draft content...",status:"Published",date:"2026-03-05",source:"Checkmarx"},
+  {id:2,title:"Why Zero Trust Fails Without Application-Layer Thinking",body:"Draft content...",status:"Scheduled",date:"2026-03-14",source:"PortSwigger"},
 ];
 
 function ls(k,v){try{if(v!==undefined)localStorage.setItem(k,JSON.stringify(v));else{const x=localStorage.getItem(k);return x?JSON.parse(x):null;}}catch(e){return null;}}
@@ -58,7 +66,7 @@ function getDaysUntil(mmdd){
   if(n<t0)n.setFullYear(t.getFullYear()+1);
   return Math.round((n-t0)/86400000);
 }
-function getUpcomingCelebrations(contacts){
+function getCelebrations(contacts){
   const ev=[];
   contacts.forEach(c=>{
     if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)ev.push({...c,type:"Birthday",emoji:"🎂",days:d});}
@@ -67,352 +75,468 @@ function getUpcomingCelebrations(contacts){
   return ev.sort((a,b)=>a.days-b.days);
 }
 
-async function fetchCheckmarxPosts(){
-  for(const mk of RSS_PROXIES){
+// Fetch all RSS feeds in parallel
+async function fetchAllTopics(){
+  const results=await Promise.allSettled(
+    FEED_SOURCES.map(async src=>{
+      try{
+        const r=await fetch(RSS_PROXY(src.url),{signal:AbortSignal.timeout(7000)});
+        const d=await r.json();
+        if(!d.items?.length)return [];
+        return d.items.slice(0,3).map(i=>({
+          title:i.title?.trim()||"",
+          link:i.link||i.url||"",
+          summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,400),
+          date:i.pubDate||i.published||"",
+          source:src.name,
+          tag:src.tag,
+        })).filter(i=>i.title);
+      }catch{return [];}
+    })
+  );
+  const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]);
+  if(!all.length)throw new Error("No articles fetched. Check internet connection.");
+  // Sort by date descending
+  return all.sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+
+// ── Master ChatGPT Prompt ─────────────────────────────────────
+function buildMasterPrompt(selectedArticles){
+  const today=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
+  const articleBlock=selectedArticles.map((a,i)=>`
+ARTICLE ${i+1} — ${a.source} [${a.tag}]
+Title: ${a.title}
+Summary: ${a.summary}
+URL: ${a.link}
+Published: ${a.date?new Date(a.date).toLocaleDateString():"Recent"}
+`).join("\n---\n");
+
+  return `Today's date: ${today}
+
+You are helping a senior cybersecurity leader write a LinkedIn post to build thought leadership in Application Security.
+
+AUTHOR PROFILE:
+- Strategic mindset: connects application security risks to business impact, board-level thinking
+- Educator: simplifies complex security concepts so both a CISO and a junior developer can understand
+- Practitioner credibility: speaks from experience, not theory
+- Tone: measured, confident, authoritative — no hype, no clichés, no cheerleading
+- Writing style: short paragraphs, plain English, no bullet points in the post itself, no emojis at all
+- Personal: uses "I", "we", "in my experience" — not generic third-person observations
+
+SOURCE ARTICLES (use these as the foundation, but go further):
+${articleBlock}
+
+YOUR TASK — produce the following, clearly separated by headers:
+
+---
+## LINKEDIN POST
+
+Rules:
+- Open with one sentence that makes a security professional stop scrolling. No question hooks. State something provocative or counterintuitive.
+- Write 4 short paragraphs. Each paragraph maximum 3 sentences.
+- Paragraph 1: The insight or problem — what is actually happening in the industry right now, grounded in the articles above but enriched with any other relevant developments from the past 7 days (new CVEs, breaches, vendor announcements, regulatory changes)
+- Paragraph 2: Why it matters from a business risk perspective — translate the technical into the boardroom
+- Paragraph 3: What most organisations are getting wrong, or what the conventional wisdom misses
+- Paragraph 4: What good looks like — a practical, honest recommendation. Not a sales pitch. Something actionable.
+- End with: 3 hashtags only, on a new line, no spaces between them: #ApplicationSecurity #CyberSecurity #AppSec
+- No emojis anywhere. No bold text. No bullet points. No headers inside the post.
+- Total length: 250 to 350 words maximum.
+
+---
+## THOUGHT LEADERSHIP QUOTE
+
+- One standalone quote, 2 sentences maximum
+- Must feel like something a practitioner with 15 years of experience would say
+- Attribute it as: — AppSec & Security Leader
+- No emojis
+
+---
+## IMAGE GENERATION PROMPT
+
+Write a DALL-E image generation prompt for a professional LinkedIn visual that:
+- Reflects the theme of the post
+- Style: dark, cinematic, corporate — think Wired magazine cover meets enterprise security
+- No text, no logos, no people's faces
+- Suitable for a 1200x628 LinkedIn post image
+- Be specific about composition, lighting, and mood
+
+---
+## SUGGESTED POST TITLE
+
+One headline-style title for this post (for your own filing/schedule). Max 12 words.
+
+---
+
+IMPORTANT REMINDERS:
+- Search your knowledge for any related news, CVE disclosures, breach reports, or security announcements from the past 14 days that are relevant to the topic. Do not rely only on the articles provided.
+- Write as the author, in first person. This is not a summary of the articles — it is a professional perspective informed by them.
+- If the articles are more than 2 weeks old, treat them as background context only and lead with what is current.`;
+}
+
+// ── Share via Android Share Sheet ────────────────────────────
+async function sharePrompt(prompt){
+  // Try native Web Share API (works on Android Chrome to share to any app including ChatGPT)
+  if(navigator.share){
     try{
-      const r=await fetch(mk(CHECKMARX_RSS),{signal:AbortSignal.timeout(8000)});
-      const d=await r.json();
-      if(d.items?.length>0)return d.items.slice(0,5).map(i=>({
-        title:i.title,
-        link:i.link||i.url,
-        summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").slice(0,500),
-        date:i.pubDate||i.published||"",
-      }));
-    }catch(e){continue;}
+      await navigator.share({title:"LinkedIn Post Prompt",text:prompt});
+      return true;
+    }catch(e){
+      if(e.name==="AbortError")return false; // user cancelled
+    }
   }
-  throw new Error("Could not fetch Checkmarx blog.");
+  // Fallback: copy to clipboard + open ChatGPT web
+  await navigator.clipboard?.writeText(prompt).catch(()=>{});
+  return false;
 }
 
-// ── The master ChatGPT prompt ─────────────────────────────────
-function buildPrompt(article){
-  return `You are a world-class AppSec thought leader writing a LinkedIn post to establish authority in Application Security and AI-driven threats.
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-SOURCE ARTICLE (Checkmarx):
-Title: "${article.title}"
-Summary: "${article.summary}"
-Link: ${article.link}
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-YOUR TASK — produce ALL of the following in one response:
-
-1. 📝 LINKEDIN POST
-   - Start with a powerful hook (first line must stop the scroll)
-   - 3-4 paragraphs, under 600 words
-   - Add my personal perspective as an AppSec professional
-   - Reference the Checkmarx insight naturally
-   - Also search Medium, OWASP, DarkReading, Krebs on Security, and DEV.to for any related recent articles to enrich the post
-   - Use relevant emojis throughout
-   - End with 5-7 hashtags: #AppSec #ApplicationSecurity #CyberSecurity #AIThreats #DevSecOps #ZeroTrust #InfoSec
-
-2. 💬 THOUGHT LEADERSHIP QUOTE
-   - One powerful original quote (2-3 sentences) I can use as a pull-quote or carousel slide
-   - Format: "Quote text here." — [My Name], AppSec Professional
-
-3. 🖼️ IMAGE GENERATION PROMPT
-   - Write a detailed DALL-E / ChatGPT image prompt to generate a professional visual for this post
-   - Style: modern, dark tech aesthetic, no text in image, suitable for LinkedIn
-   - Example format: "A cinematic digital artwork of [description]..."
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-IMPORTANT:
-- This is purely AppSec thought leadership — no sales, no product pitches
-- Write as a practitioner who lives and breathes application security
-- Make it feel authentic, not like marketing copy
-━━━━━━━━━━━━━━━━━━━━━━━━`;
-}
-
-function Badge({text,color="blue"}){
-  const c={blue:"bg-blue-100 text-blue-700",green:"bg-green-100 text-green-700",yellow:"bg-yellow-100 text-yellow-800",red:"bg-red-100 text-red-700",purple:"bg-purple-100 text-purple-700",gray:"bg-gray-100 text-gray-600",orange:"bg-orange-100 text-orange-700",pink:"bg-pink-100 text-pink-700",indigo:"bg-indigo-100 text-indigo-700",teal:"bg-teal-100 text-teal-700"};
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[color]||c.blue}`}>{text}</span>;
+function Badge({text,color="slate"}){
+  const c={slate:"bg-slate-100 text-slate-600",blue:"bg-blue-100 text-blue-700",green:"bg-green-100 text-green-700",yellow:"bg-yellow-100 text-yellow-800",red:"bg-red-100 text-red-700",purple:"bg-purple-100 text-purple-700",gray:"bg-gray-100 text-gray-600",orange:"bg-orange-100 text-orange-700",pink:"bg-pink-100 text-pink-700",indigo:"bg-indigo-100 text-indigo-700",teal:"bg-teal-100 text-teal-700",cyan:"bg-cyan-100 text-cyan-700"};
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[color]||c.slate}`}>{text}</span>;
 }
 function statusColor(s){return s==="Published"?"green":s==="Scheduled"?"blue":"gray";}
+function sourceColor(s){
+  const m={Checkmarx:"indigo",PortSwigger:"cyan",OWASP:"orange","Dark Reading":"red","Krebs on Security":"purple","The Hacker News":"teal"};
+  return m[s]||"slate";
+}
 
 // ── Bixby Guide ───────────────────────────────────────────────
 function BixbyGuide({onClose}){
   const triggerUrl=APP_URL+"?action=autoblog";
-  const steps=[
-    {n:1,icon:"⚙️",title:"Open Bixby Routines",desc:"Settings → Advanced Features → Bixby Routines"},
-    {n:2,icon:"➕",title:"Create New Routine",desc:'Tap "+" → name it "LinkedIn Auto Blog"'},
-    {n:3,icon:"🕘",title:"Set IF: Time",desc:"Tap IF → Time → 9:00 AM → Repeat: Tuesday & Friday"},
-    {n:4,icon:"📱",title:"Set THEN: Open App",desc:`Tap THEN → Open App → Chrome → paste this URL:\n${triggerUrl}`},
-    {n:5,icon:"🔔",title:"Add Notification",desc:'Tap + → Send Notification → "📝 Blog time! Fetching Checkmarx..."'},
-    {n:6,icon:"✅",title:"Save & Enable",desc:"Save and toggle ON. Every Tue & Fri at 9AM your app opens, fetches Checkmarx, builds the full prompt, and opens ChatGPT ready to go!"},
-  ];
   return(
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
       <div className="bg-white rounded-t-2xl w-full max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b">
+        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b z-10">
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"/>
           <div className="flex justify-between items-center">
-            <div><div className="font-bold text-lg">⚡ Bixby Setup</div><div className="text-xs text-gray-400">Auto-trigger every Tue & Fri 9AM</div></div>
-            <button onClick={onClose} className="text-gray-400 text-2xl">×</button>
+            <div><div className="font-bold text-lg">Bixby Routines Setup</div><div className="text-xs text-gray-400">Auto-trigger every Tuesday and Friday at 9 AM</div></div>
+            <button onClick={onClose} className="text-gray-400 text-2xl w-8 h-8 flex items-center justify-center">x</button>
           </div>
         </div>
         <div className="p-5 space-y-4">
-          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
-            <strong>Full auto flow:</strong> Bixby → App fetches Checkmarx Zero → Builds AppSec thought leadership prompt → Opens ChatGPT with post + quote + image prompt ready 🚀
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
+            Bixby Routines is a Samsung system app. Chrome cannot open it directly — that is an Android security restriction. The steps below are the correct way to set this up on your Samsung device.
           </div>
-          {steps.map(s=>(
+
+          {[
+            {n:1,title:"Open Bixby Routines",body:"On your Samsung phone go to Settings. Scroll down to Advanced Features. Tap Bixby Routines. If you do not see it, search for Bixby Routines in the Settings search bar."},
+            {n:2,title:"Create a new routine",body:'Tap the plus (+) button at the bottom right. Give it a name such as LinkedIn Blog Automation.'},
+            {n:3,title:"Set the IF trigger — Time",body:"Tap IF. Select Time. Set the time to 9:00 AM. Under Repeat, select Tuesday and Friday. Tap Done."},
+            {n:4,title:"Set the THEN action — Open app",body:"Tap THEN. Tap Add action. Select Apps. Select Open app. Choose Chrome from the list. In the URL field, paste the trigger URL shown below. Tap Done."},
+            {n:5,title:"Add a notification reminder (optional)",body:'Tap the plus (+) to add another THEN action. Select Send notification. Set title to: Blog post day. Set body to: Your app is fetching the latest AppSec topics now. Tap Done.'},
+            {n:6,title:"Save and enable",body:"Tap Save. Make sure the toggle next to your routine is switched ON. Bixby will now open your app automatically every Tuesday and Friday at 9 AM, fetch the latest topics, and have everything ready for you."},
+          ].map(s=>(
             <div key={s.n} className="flex gap-3 bg-gray-50 rounded-xl p-4">
-              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">{s.n}</div>
-              <div><div className="font-semibold text-sm">{s.icon} {s.title}</div><div className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{s.desc}</div></div>
+              <div className="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">{s.n}</div>
+              <div><div className="font-semibold text-sm text-gray-800 mb-1">{s.title}</div><div className="text-xs text-gray-500 leading-relaxed">{s.body}</div></div>
             </div>
           ))}
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-            <div className="font-semibold text-green-800 text-sm mb-2">📋 Bixby Trigger URL (tap to copy)</div>
-            <div className="text-xs font-mono break-all bg-white rounded-lg p-2 border border-green-200 text-green-700"
-              onClick={()=>{navigator.clipboard?.writeText(triggerUrl);alert("✅ Copied!");}}>
+
+          <div className="bg-slate-800 rounded-xl p-4">
+            <div className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wide">Your Trigger URL — tap to copy</div>
+            <div className="text-xs font-mono break-all text-green-400 bg-black/30 rounded-lg p-3"
+              onClick={()=>{navigator.clipboard?.writeText(triggerUrl);alert("Copied. Paste this into the Chrome URL field inside Bixby Routines.");}}>
               {triggerUrl}
             </div>
+            <div className="text-xs text-slate-400 mt-2">Tap the URL above to copy it to your clipboard</div>
           </div>
-          <button onClick={onClose} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold">Got it! ✅</button>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
+            <strong>Important:</strong> Make sure this app is installed on your home screen as a PWA before setting up Bixby. In Chrome, tap the three-dot menu and select Add to Home Screen. Bixby opens Chrome, which then loads the app at the trigger URL and automatically starts fetching topics.
+          </div>
+
+          <button onClick={onClose} className="w-full bg-slate-800 text-white py-3 rounded-xl font-semibold text-sm">Done</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── AUTO BLOG TAB ─────────────────────────────────────────────
-function AutoBlog({posts,setPosts}){
-  const [status,setStatus]=useState("idle");
+// ── TOPICS TAB (replaces Auto-Blog) ──────────────────────────
+function Topics({posts,setPosts}){
+  const [status,setStatus]=useState("idle"); // idle|fetching|ready|error
   const [articles,setArticles]=useState([]);
-  const [selected,setSelected]=useState(null);
+  const [selected,setSelected]=useState([]);
   const [prompt,setPrompt]=useState("");
-  const [copied,setCopied]=useState(false);
   const [showPrompt,setShowPrompt]=useState(false);
+  const [shareStatus,setShareStatus]=useState("idle"); // idle|copied|shared
+  const [filterTag,setFilterTag]=useState("All");
 
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);
-    if(p.get("action")==="autoblog")fetchArticles();
+    if(p.get("action")==="autoblog")fetchTopics();
   },[]);
 
-  async function fetchArticles(){
-    setStatus("fetching");setArticles([]);setSelected(null);setPrompt("");setCopied(false);
+  async function fetchTopics(){
+    setStatus("fetching");setArticles([]);setSelected([]);setPrompt("");
     try{
-      const items=await fetchCheckmarxPosts();
+      const items=await fetchAllTopics();
       setArticles(items);
-      setSelected(items[0]);
-      setPrompt(buildPrompt(items[0]));
       setStatus("ready");
     }catch(e){setStatus("error");}
   }
 
-  function selectArticle(a){
-    setSelected(a);
-    setPrompt(buildPrompt(a));
-    setCopied(false);
+  function toggleSelect(a){
+    setSelected(prev=>{
+      const exists=prev.find(x=>x.link===a.link);
+      if(exists)return prev.filter(x=>x.link!==a.link);
+      if(prev.length>=3)return prev; // max 3
+      return [...prev,a];
+    });
   }
 
-  function handleOpenChatGPT(){
-    navigator.clipboard?.writeText(prompt).then(()=>{
-      setCopied(true);
-      setTimeout(()=>{
-        window.location.href="chatgpt://";
-        setTimeout(()=>window.open("https://chat.openai.com/","_blank"),1500);
-      },300);
-    }).catch(()=>window.open("https://chat.openai.com/","_blank"));
+  useEffect(()=>{
+    if(selected.length>0)setPrompt(buildMasterPrompt(selected));
+  },[selected]);
+
+  async function handleShare(){
+    if(!prompt)return;
+    setShareStatus("sharing");
+    const shared=await sharePrompt(prompt);
+    if(shared){
+      setShareStatus("shared");
+      setTimeout(()=>setShareStatus("idle"),3000);
+    }else{
+      // Fallback — copied to clipboard
+      await navigator.clipboard?.writeText(prompt).catch(()=>{});
+      setShareStatus("copied");
+      setTimeout(()=>setShareStatus("idle"),3000);
+      // Open ChatGPT web as fallback
+      setTimeout(()=>window.open("https://chat.openai.com/","_blank"),600);
+    }
   }
 
   function saveAsDraft(){
-    if(!selected)return;
-    const post={id:Date.now(),title:selected.title,body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],topic:"AI & Application Security"};
+    if(!selected.length)return;
+    const title=selected[0].title.slice(0,80);
+    const post={id:Date.now(),title,body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],source:selected[0].source};
     const u=[...posts,post];setPosts(u);ls("posts",u);
-    alert("✅ Saved as draft!");
+    alert("Saved as draft in Schedule tab.");
   }
+
+  const allTags=["All",...new Set(articles.map(a=>a.tag))];
+  const filtered=filterTag==="All"?articles:articles.filter(a=>a.tag===filterTag);
 
   return(
     <div className="space-y-4 pb-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-slate-900 to-blue-900 rounded-xl p-5 text-white">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-2xl">🔐</span>
-          <div>
-            <div className="font-bold text-lg">AppSec Thought Leadership</div>
-            <div className="text-xs text-blue-300">Powered by Checkmarx Zero · ChatGPT</div>
-          </div>
-        </div>
-        <div className="text-xs text-blue-200 mt-2 leading-relaxed">Fetches the latest Checkmarx blog → builds a full LinkedIn post + quote + image prompt → opens ChatGPT</div>
+      <div className="bg-slate-900 rounded-xl p-5 text-white">
+        <div className="font-bold text-lg tracking-tight">AppSec Thought Leadership</div>
+        <div className="text-xs text-slate-400 mt-1">Pulls live topics from 6 security sources. Select 1 to 3, then send to ChatGPT.</div>
         <div className="flex flex-wrap gap-2 mt-3">
-          <Badge text="🔐 AppSec" color="indigo"/>
-          <Badge text="📰 Checkmarx Zero" color="blue"/>
-          <Badge text="🤖 ChatGPT" color="teal"/>
-          <Badge text="🖼️ Image Prompt" color="purple"/>
+          {FEED_SOURCES.map(s=><Badge key={s.name} text={s.name} color={sourceColor(s.name)}/>)}
         </div>
       </div>
 
       {/* What you get */}
-      <div className="bg-white border rounded-xl p-4">
-        <div className="font-semibold text-sm text-gray-700 mb-3">📦 What ChatGPT will generate:</div>
-        <div className="space-y-2">
-          {[
-            {icon:"📝",title:"LinkedIn Post",desc:"600 words, hook opener, AppSec insight, enriched with Medium + OWASP + DarkReading sources"},
-            {icon:"💬",title:"Thought Leadership Quote",desc:"A powerful pull-quote you can use as a carousel slide or story"},
-            {icon:"🖼️",title:"Image Generation Prompt",desc:"A detailed DALL-E prompt to generate a professional visual for your post"},
-          ].map(item=>(
-            <div key={item.icon} className="flex gap-3 bg-gray-50 rounded-xl p-3">
-              <span className="text-xl shrink-0">{item.icon}</span>
-              <div><div className="font-semibold text-sm text-gray-800">{item.title}</div><div className="text-xs text-gray-500 mt-0.5">{item.desc}</div></div>
-            </div>
-          ))}
-        </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">ChatGPT will produce</div>
+        {[
+          ["LinkedIn Post","250-350 words. No emojis. No bullet points. Professional, first-person, strategic-educator tone. Cross-referenced with latest 14-day news."],
+          ["Thought Leadership Quote","A standalone 2-sentence quote. Attribution ready. Suitable for a carousel or story."],
+          ["Image Generation Prompt","A detailed DALL-E prompt. Paste it into ChatGPT's image tab — no separate copy needed, it is in the same response."],
+        ].map(([t,d])=>(
+          <div key={t} className="flex gap-3 items-start">
+            <div className="w-1.5 h-1.5 bg-slate-400 rounded-full mt-1.5 shrink-0"/>
+            <div><span className="text-sm font-semibold text-gray-800">{t} — </span><span className="text-xs text-gray-500">{d}</span></div>
+          </div>
+        ))}
       </div>
 
-      {/* Fetch button */}
+      {/* Fetch */}
       {status==="idle"&&(
-        <button onClick={fetchArticles} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-bold text-base shadow-md active:opacity-90">
-          🔄 Fetch Latest Checkmarx Zero Post
+        <button onClick={fetchTopics} className="w-full bg-slate-800 text-white py-4 rounded-xl font-semibold text-sm active:bg-slate-700">
+          Fetch Latest Security Topics
         </button>
       )}
 
-      {/* Fetching */}
       {status==="fetching"&&(
         <div className="bg-white border rounded-xl p-10 text-center">
-          <div className="text-3xl spin mb-3">🌐</div>
-          <div className="font-semibold text-gray-700">Fetching from Checkmarx Zero...</div>
-          <div className="text-xs text-gray-400 mt-1">Reading latest AppSec articles</div>
+          <div className="text-2xl spin mb-3">○</div>
+          <div className="font-semibold text-gray-700 text-sm">Fetching from 6 security sources...</div>
+          <div className="text-xs text-gray-400 mt-1">Checkmarx, PortSwigger, OWASP, Dark Reading, Krebs, The Hacker News</div>
         </div>
       )}
 
-      {/* Error */}
       {status==="error"&&(
         <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
-          <div className="text-3xl mb-2">❌</div>
-          <div className="font-semibold text-red-700">Could not fetch Checkmarx blog</div>
+          <div className="font-semibold text-red-700 text-sm">Could not fetch topics</div>
           <div className="text-xs text-red-400 mt-1 mb-4">Check your internet connection and try again</div>
-          <button onClick={fetchArticles} className="bg-red-500 text-white px-6 py-2 rounded-xl text-sm font-medium">Try Again</button>
+          <button onClick={fetchTopics} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium">Retry</button>
         </div>
       )}
 
-      {/* Articles */}
       {status==="ready"&&(
-        <>
-          <div className="font-semibold text-sm text-gray-700">📰 Latest from Checkmarx Zero — select one:</div>
+        <div className="fade space-y-4">
+          {/* Selection counter */}
+          <div className="flex justify-between items-center">
+            <div className="text-sm font-semibold text-gray-700">{articles.length} topics found</div>
+            <div className="flex gap-2 items-center">
+              {selected.length>0&&<span className="text-xs text-blue-600 font-semibold">{selected.length} selected</span>}
+              <button onClick={()=>{setStatus("idle");setArticles([]);setSelected([]);}} className="text-xs text-gray-400 border px-2 py-1 rounded-lg">Refresh</button>
+            </div>
+          </div>
+
+          {/* Tag filter */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {allTags.map(t=><button key={t} onClick={()=>setFilterTag(t)} className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition ${filterTag===t?"bg-slate-800 text-white":"bg-white border text-gray-600"}`}>{t}</button>)}
+          </div>
+
+          {/* Article cards */}
           <div className="space-y-2">
-            {articles.map((a,i)=>(
-              <button key={i} onClick={()=>selectArticle(a)}
-                className={`w-full text-left border rounded-xl p-3 transition ${selected?.title===a.title?"border-blue-500 bg-blue-50":"bg-white border-gray-200"}`}>
-                <div className="flex items-start gap-2">
-                  <span className="text-lg shrink-0">{selected?.title===a.title?"✅":"📄"}</span>
-                  <div>
-                    <div className="font-medium text-sm text-gray-800">{a.title}</div>
-                    {a.date&&<div className="text-xs text-gray-400 mt-0.5">{new Date(a.date).toLocaleDateString()}</div>}
-                    {a.summary&&<div className="text-xs text-gray-500 mt-1 line-clamp-2">{a.summary}</div>}
+            {filtered.map((a,i)=>{
+              const isSel=selected.find(x=>x.link===a.link);
+              const isMaxed=selected.length>=3&&!isSel;
+              return(
+                <button key={i} onClick={()=>!isMaxed&&toggleSelect(a)}
+                  className={`w-full text-left border rounded-xl p-4 transition ${isSel?"border-slate-800 bg-slate-50":isMaxed?"opacity-40 bg-white border-gray-100":"bg-white border-gray-200 active:bg-gray-50"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <Badge text={a.source} color={sourceColor(a.source)}/>
+                        {a.date&&<span className="text-xs text-gray-400">{new Date(a.date).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>}
+                      </div>
+                      <div className="font-semibold text-sm text-gray-800 leading-snug">{a.title}</div>
+                      {a.summary&&<div className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{a.summary}</div>}
+                    </div>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${isSel?"bg-slate-800 border-slate-800 text-white":"border-gray-300"}`}>
+                      {isSel&&<span className="text-xs font-bold">{selected.findIndex(x=>x.link===a.link)+1}</span>}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
 
           {/* Prompt preview */}
-          {selected&&(
+          {selected.length>0&&(
             <div className="bg-white border rounded-xl overflow-hidden">
-              <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3 text-sm font-semibold text-gray-700">
-                <span>📋 Full ChatGPT Prompt Preview</span>
-                <span className="text-gray-400 text-xs">{showPrompt?"▲ hide":"▼ show"}</span>
+              <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3">
+                <span className="text-sm font-semibold text-gray-700">Preview ChatGPT Prompt</span>
+                <span className="text-xs text-gray-400">{showPrompt?"hide":"show"}</span>
               </button>
               {showPrompt&&(
                 <div className="px-4 pb-4">
-                  <textarea className="w-full border rounded-xl p-3 text-xs h-52 resize-none bg-gray-50 text-gray-600" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
-                  <div className="text-xs text-gray-400 mt-1">✏️ You can edit this before sending to ChatGPT</div>
+                  <textarea className="w-full border rounded-xl p-3 text-xs h-48 resize-none bg-gray-50 text-gray-600 leading-relaxed" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+                  <div className="text-xs text-gray-400 mt-1">You can edit this before sending</div>
                 </div>
               )}
             </div>
           )}
 
-          {/* CTA */}
-          <div className="space-y-3">
-            <button onClick={handleOpenChatGPT}
-              className={`w-full py-4 rounded-xl font-bold text-base shadow-md transition ${copied?"bg-green-500 text-white":"bg-[#10a37f] text-white"}`}>
-              {copied?"✅ Prompt Copied! Opening ChatGPT...":"🤖 Copy Full Prompt & Open ChatGPT"}
-            </button>
+          {/* Action */}
+          {selected.length>0&&(
+            <div className="space-y-3">
+              <button onClick={handleShare}
+                className={`w-full py-4 rounded-xl font-bold text-sm transition ${shareStatus==="shared"?"bg-green-600 text-white":shareStatus==="copied"?"bg-amber-600 text-white":"bg-slate-800 text-white active:bg-slate-700"}`}>
+                {shareStatus==="shared"?"Sent to ChatGPT via Share Sheet":shareStatus==="copied"?"Prompt copied — ChatGPT opening in browser":"Send to ChatGPT"}
+              </button>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
-              <div className="font-semibold">📌 In ChatGPT — do this:</div>
-              <div>1. Paste the prompt → hit Send</div>
-              <div>2. Copy the LinkedIn post → paste on LinkedIn</div>
-              <div>3. Copy the image prompt → tap the 🖼️ image icon in ChatGPT → generate</div>
-              <div>4. Download image → attach to your LinkedIn post</div>
-              <div>5. Use the quote as your first comment or carousel</div>
-            </div>
+              {/* How it works on Android */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 leading-relaxed space-y-2">
+                <div className="font-semibold text-slate-800">How this works on your Samsung</div>
+                <div>Tapping Send to ChatGPT uses Android's Share Sheet. Your phone will show a list of apps — select ChatGPT. The full prompt is shared directly into it. No copy-paste needed.</div>
+                <div>If ChatGPT is not in the share list, open the ChatGPT app once manually first, then return here and try again.</div>
+                <div className="font-semibold text-slate-700 mt-1">Inside ChatGPT:</div>
+                <div>1. The post will be generated with the image prompt included at the end</div>
+                <div>2. Tap the image icon in ChatGPT to generate the visual using the prompt in the response</div>
+                <div>3. Copy the LinkedIn post section and paste it on LinkedIn</div>
+                <div>4. Use the quote as your first comment or a carousel slide</div>
+              </div>
 
-            <div className="flex gap-2">
-              <button onClick={saveAsDraft} className="flex-1 border border-blue-300 text-blue-600 py-2.5 rounded-xl text-sm font-medium">💾 Save Draft</button>
-              <button onClick={()=>{setStatus("idle");setArticles([]);setCopied(false);}} className="flex-1 border text-gray-500 py-2.5 rounded-xl text-sm font-medium">🔄 Refresh</button>
+              <div className="flex gap-2">
+                <button onClick={saveAsDraft} className="flex-1 border border-slate-300 text-slate-700 py-2.5 rounded-xl text-sm font-medium active:bg-slate-50">Save Draft</button>
+                <button onClick={()=>setSelected([])} className="flex-1 border text-gray-400 py-2.5 rounded-xl text-sm active:bg-gray-50">Clear Selection</button>
+              </div>
             </div>
+          )}
+
+          {/* Bixby URL reminder */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <div className="text-xs font-semibold text-slate-700 mb-1">Bixby auto-trigger URL</div>
+            <div className="text-xs font-mono text-slate-500 break-all">{APP_URL}?action=autoblog</div>
           </div>
-        </>
+        </div>
       )}
-
-      {/* Bixby reminder */}
-      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-        <div className="font-semibold text-violet-800 text-sm">⚡ Bixby Auto-Trigger</div>
-        <div className="text-xs text-violet-600 mt-1">Bixby opens this tab automatically every Tue & Fri at 9AM using this URL:</div>
-        <div className="text-xs font-mono text-violet-700 mt-1 break-all">{APP_URL}?action=autoblog</div>
-      </div>
     </div>
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────
-function Dashboard({contacts,posts,setTab,showBixby}){
-  const cel=getUpcomingCelebrations(contacts);
-  const today=cel.filter(e=>e.days===0);
+// ── Home ──────────────────────────────────────────────────────
+function Home({contacts,posts,setTab,showBixby}){
+  const cel=getCelebrations(contacts);
+  const todayCel=cel.filter(e=>e.days===0);
   const week7=cel.filter(e=>e.days>0&&e.days<=7);
   const strong=contacts.filter(c=>c.strength==="Strong").length;
-  const notifOk="Notification" in window&&Notification.permission==="granted";
 
   return(
     <div className="space-y-4 pb-6">
-      {today.length>0&&<div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl p-4 text-white"><div className="font-bold">🎉 Today's Celebrations!</div>{today.map((e,i)=><div key={i} className="text-sm mt-1">{e.emoji} {e.type} — <strong>{e.name}</strong></div>)}</div>}
-
-      <button onClick={()=>setTab("Auto-Blog")} className="w-full bg-gradient-to-r from-slate-900 to-blue-800 rounded-xl p-4 text-white text-left active:opacity-90">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-bold text-lg">🔐 AppSec Auto Blog</div>
-            <div className="text-xs text-blue-300 mt-0.5">Checkmarx Zero → ChatGPT → LinkedIn</div>
-            <div className="flex gap-1 mt-2 flex-wrap">
-              <Badge text="Post" color="indigo"/>
-              <Badge text="Quote" color="purple"/>
-              <Badge text="Image Prompt" color="teal"/>
-            </div>
-          </div>
-          <span className="text-3xl">→</span>
+      {todayCel.length>0&&(
+        <div className="bg-rose-600 rounded-xl p-4 text-white">
+          <div className="font-bold">Celebrations today</div>
+          {todayCel.map((e,i)=><div key={i} className="text-sm mt-1">{e.emoji} {e.type} — {e.name}</div>)}
         </div>
+      )}
+
+      <button onClick={()=>setTab("Topics")} className="w-full bg-slate-900 rounded-xl p-5 text-white text-left active:opacity-90">
+        <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">AppSec Thought Leadership</div>
+        <div className="font-bold text-lg">Fetch Today's Topics</div>
+        <div className="text-xs text-slate-400 mt-1">Pulls from 6 live security sources. Select 1-3 topics. Send to ChatGPT.</div>
+        <div className="mt-3 text-xs text-slate-300">Post · Quote · Image Prompt — all in one ChatGPT response</div>
       </button>
 
-      <div className="bg-gradient-to-r from-violet-600 to-purple-700 rounded-xl p-4 text-white">
-        <div className="flex justify-between items-start">
-          <div><div className="font-bold">⚡ Bixby — Tue & Fri 9AM</div><div className="text-xs text-purple-200 mt-0.5">Fully automated trigger</div></div>
-          {notifOk&&<Badge text="Active ✅" color="green"/>}
-        </div>
-        <div className="flex gap-2 mt-3">
-          <button onClick={showBixby} className="bg-white text-purple-700 text-xs font-bold px-3 py-2 rounded-lg">📖 Setup Guide</button>
-          {!notifOk&&<button onClick={()=>Notification.requestPermission()} className="border border-purple-300 text-white text-xs px-3 py-2 rounded-lg">🔔 Enable Alerts</button>}
-        </div>
+      <div className="bg-violet-700 rounded-xl p-4 text-white">
+        <div className="font-bold text-sm">Bixby Auto-Trigger</div>
+        <div className="text-xs text-violet-200 mt-0.5 mb-3">Opens this app every Tuesday and Friday at 9 AM automatically</div>
+        <button onClick={showBixby} className="bg-white text-violet-800 text-xs font-bold px-4 py-2 rounded-lg">Setup Guide</button>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {[{label:"Total Contacts",value:contacts.length,icon:"👥",color:"bg-blue-50 border-blue-200",tab:"Contacts"},{label:"Strong Connections",value:strong,icon:"💼",color:"bg-green-50 border-green-200",tab:"Contacts"},{label:"Posts Published",value:posts.filter(p=>p.status==="Published").length,icon:"✅",color:"bg-purple-50 border-purple-200",tab:"Schedule"},{label:"Upcoming Events",value:cel.length,icon:"🎂",color:"bg-pink-50 border-pink-200",tab:"Celebrations"}].map(card=>(
-          <button key={card.label} onClick={()=>setTab(card.tab)} className={`${card.color} border rounded-xl p-3 text-left active:scale-95 transition-transform`}>
-            <div className="text-xl">{card.icon}</div>
-            <div className="text-2xl font-bold text-gray-800">{card.value}</div>
-            <div className="text-xs text-gray-500">{card.label}</div>
+        {[
+          {label:"Contacts",value:contacts.length,sub:`${strong} strong`,tab:"Contacts"},
+          {label:"Published",value:posts.filter(p=>p.status==="Published").length,sub:"posts",tab:"Schedule"},
+          {label:"Scheduled",value:posts.filter(p=>p.status==="Scheduled").length,sub:"upcoming",tab:"Schedule"},
+          {label:"Celebrations",value:cel.length,sub:"this month",tab:"Events"},
+        ].map(c=>(
+          <button key={c.label} onClick={()=>setTab(c.tab)} className="bg-white border border-gray-200 rounded-xl p-4 text-left active:bg-gray-50">
+            <div className="text-2xl font-bold text-slate-800">{c.value}</div>
+            <div className="text-sm font-semibold text-gray-700">{c.label}</div>
+            <div className="text-xs text-gray-400">{c.sub}</div>
           </button>
         ))}
       </div>
 
-      {week7.length>0&&<div className="bg-white border rounded-xl p-4"><h3 className="font-semibold text-gray-700 mb-3">🔔 This Week</h3>{week7.map((e,i)=><div key={i} className="flex items-center justify-between py-2 border-b last:border-0"><div><div className="font-medium text-sm">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div><div className="flex gap-1 items-center"><span>{e.emoji}</span><Badge text={`${e.days}d`} color="pink"/></div></div>)}</div>}
+      {week7.length>0&&(
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="font-semibold text-sm text-gray-700 mb-3">Coming up this week</div>
+          {week7.map((e,i)=>(
+            <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div><div className="text-sm font-medium text-gray-800">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div>
+              <div className="text-right"><div className="text-sm">{e.emoji}</div><div className="text-xs text-gray-400">{e.days}d</div></div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="bg-white border rounded-xl p-4">
-        <h3 className="font-semibold text-gray-700 mb-3">💼 Connection Strength</h3>
-        {STRENGTHS.map(s=>{const count=contacts.filter(c=>c.strength===s).length;const pct=contacts.length?Math.round(count/contacts.length*100):0;return(<div key={s} className="mb-2"><div className="flex justify-between text-xs text-gray-600 mb-1"><span>{s}</span><span>{count}</span></div><div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${s==="Strong"?"bg-green-500":s==="Warm"?"bg-yellow-400":"bg-gray-300"}`} style={{width:`${pct}%`}}/></div></div>);})}
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <div className="font-semibold text-sm text-gray-700 mb-3">Connection Strength</div>
+        {STRENGTHS.map(s=>{
+          const count=contacts.filter(c=>c.strength===s).length;
+          const pct=contacts.length?Math.round(count/contacts.length*100):0;
+          return(
+            <div key={s} className="mb-2.5">
+              <div className="flex justify-between text-xs text-gray-600 mb-1"><span>{s}</span><span>{count}</span></div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${s==="Strong"?"bg-slate-800":s==="Warm"?"bg-amber-400":"bg-gray-300"}`} style={{width:`${pct}%`,transition:"width 0.5s"}}/>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-// ── Contacts (with CSV Import) ────────────────────────────────
+// ── Contacts ──────────────────────────────────────────────────
 function Contacts({contacts,setContacts}){
   const [search,setSearch]=useState("");
   const [modal,setModal]=useState(null);
@@ -421,7 +545,11 @@ function Contacts({contacts,setContacts}){
   const [importing,setImporting]=useState(false);
   const fileRef=useRef();
 
-  const filtered=contacts.filter(c=>(activeStr==="All"||c.strength===activeStr)&&(c.name.toLowerCase().includes(search.toLowerCase())||c.company.toLowerCase().includes(search.toLowerCase())));
+  const filtered=contacts.filter(c=>
+    (activeStr==="All"||c.strength===activeStr)&&
+    (c.name.toLowerCase().includes(search.toLowerCase())||
+    (c.company||"").toLowerCase().includes(search.toLowerCase()))
+  );
   const grouped={Strong:filtered.filter(c=>c.strength==="Strong"),Warm:filtered.filter(c=>c.strength==="Warm"),Cold:filtered.filter(c=>c.strength==="Cold")};
 
   function openAdd(){setForm({name:"",role:"",company:"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"",tags:""});setModal("add");}
@@ -431,127 +559,124 @@ function Contacts({contacts,setContacts}){
     let u=modal==="add"?[...contacts,{...contact,id:Date.now()}]:contacts.map(c=>c.id===form.id?contact:c);
     setContacts(u);ls("contacts",u);setModal(null);
   }
-  function del(id){const u=contacts.filter(c=>c.id!==id);setContacts(u);ls("contacts",u);}
+  function del(id){if(!confirm("Delete this contact?"))return;const u=contacts.filter(c=>c.id!==id);setContacts(u);ls("contacts",u);}
 
-  // LinkedIn CSV Import
   function handleCSV(e){
-    const file=e.target.files[0];
-    if(!file)return;
+    const file=e.target.files[0];if(!file)return;
     setImporting(true);
     const reader=new FileReader();
     reader.onload=ev=>{
       try{
-        const text=ev.target.result;
-        const lines=text.split("\n").filter(l=>l.trim());
+        const lines=ev.target.result.split("\n").filter(l=>l.trim());
         if(lines.length<2){alert("CSV appears empty.");setImporting(false);return;}
-        // Parse header — LinkedIn CSV headers vary slightly
         const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
-        const firstIdx=headers.findIndex(h=>h.includes("first"));
-        const lastIdx=headers.findIndex(h=>h.includes("last"));
-        const companyIdx=headers.findIndex(h=>h.includes("company"));
-        const positionIdx=headers.findIndex(h=>h.includes("position")||h.includes("title")||h.includes("role"));
-        const emailIdx=headers.findIndex(h=>h.includes("email"));
-
+        const idx=k=>headers.findIndex(h=>h.includes(k));
+        const fI=idx("first"),lI=idx("last"),coI=idx("company"),roI=Math.max(idx("position"),idx("title"),idx("role")),emI=idx("email");
         const imported=[];
         for(let i=1;i<lines.length;i++){
-          // Handle quoted CSV fields
-          const cols=lines[i].match(/(".*?"|[^,]+)(?=,|$)/g)||lines[i].split(",");
-          const clean=cols.map(c=>c.replace(/^"|"$/g,"").trim());
-          const firstName=firstIdx>=0?clean[firstIdx]||"":"";
-          const lastName=lastIdx>=0?clean[lastIdx]||"":"";
-          const name=`${firstName} ${lastName}`.trim();
+          const cols=lines[i].match(/(".*?"|[^,\n]+)/g)||[];
+          const c=cols.map(x=>x.replace(/^"|"$/g,"").trim());
+          const name=`${fI>=0?c[fI]||"":""} ${lI>=0?c[lI]||"":""}`.trim();
           if(!name)continue;
-          const company=companyIdx>=0?clean[companyIdx]||"":"";
-          const role=positionIdx>=0?clean[positionIdx]||"":"";
-          // Skip duplicates by name
-          if(contacts.find(c=>c.name.toLowerCase()===name.toLowerCase()))continue;
-          imported.push({
-            id:Date.now()+i,
-            name,role,company,
-            industry:"Tech",
-            strength:"Warm",
-            followUp:"",birthday:"",workAnniversary:"",
-            notes:`Imported from LinkedIn`,
-            tags:["LinkedIn"],
-          });
+          if(contacts.find(x=>x.name.toLowerCase()===name.toLowerCase()))continue;
+          imported.push({id:Date.now()+i,name,role:roI>=0?c[roI]||"":"",company:coI>=0?c[coI]||"":"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"Imported from LinkedIn",tags:["LinkedIn"]});
         }
-        if(imported.length===0){alert("No new contacts found in CSV (duplicates skipped).");setImporting(false);return;}
+        if(!imported.length){alert("No new contacts found. Duplicates were skipped.");setImporting(false);return;}
         const u=[...contacts,...imported];
         setContacts(u);ls("contacts",u);
-        alert(`✅ Imported ${imported.length} contacts from LinkedIn!`);
-      }catch(err){alert("Could not parse CSV. Make sure it's LinkedIn's Connections.csv file.");}
-      setImporting(false);
-      fileRef.current.value="";
+        alert(`Imported ${imported.length} contacts successfully.`);
+      }catch{alert("Could not read CSV. Make sure it is LinkedIn's Connections.csv file.");}
+      setImporting(false);fileRef.current.value="";
     };
     reader.readAsText(file);
   }
 
   return(
     <div className="space-y-4 pb-6">
-      {/* LinkedIn CSV Import Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <div className="font-semibold text-blue-800 text-sm mb-1">📥 Import LinkedIn Contacts</div>
-        <div className="text-xs text-blue-600 mb-3">Export from LinkedIn → Settings → Data Privacy → Get a copy of your data → Connections → Download CSV</div>
+        <div className="font-semibold text-blue-800 text-sm mb-1">Import from LinkedIn</div>
+        <div className="text-xs text-blue-600 mb-3">LinkedIn app: Settings — Data Privacy — Get a copy of your data — select Connections — Request Archive. Download the CSV from your email and import it here.</div>
         <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleCSV}/>
-        <button onClick={()=>fileRef.current.click()} disabled={importing}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 active:bg-blue-700">
-          {importing?"⏳ Importing...":"📂 Import Connections.csv"}
+        <button onClick={()=>fileRef.current.click()} disabled={importing} className="w-full bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
+          {importing?"Importing...":"Import Connections.csv"}
         </button>
       </div>
 
       <div className="flex gap-2">
-        <input className="border rounded-xl px-3 py-2.5 text-sm flex-1 bg-white" placeholder="🔍 Search..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium">+ Add</button>
+        <input className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm flex-1 bg-white" placeholder="Search contacts..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <button onClick={openAdd} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium">Add</button>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {["All",...STRENGTHS].map(s=><button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${activeStr===s?"bg-blue-600 text-white":"bg-white border text-gray-600"}`}>{s}{s!=="All"?` (${contacts.filter(c=>c.strength===s).length})`:""}</button>)}
+        {["All",...STRENGTHS].map(s=>(
+          <button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${activeStr===s?"bg-slate-800 text-white":"bg-white border border-gray-200 text-gray-600"}`}>
+            {s}{s!=="All"?` (${contacts.filter(c=>c.strength===s).length})`:""}
+          </button>
+        ))}
       </div>
       <div className="text-xs text-gray-400">{contacts.length} total contacts</div>
 
       {(activeStr==="All"?STRENGTHS:[activeStr]).map(str=>grouped[str]?.length>0&&(
         <div key={str}>
-          <div className="text-sm font-bold text-gray-600 mb-2">{str==="Strong"?"💚":str==="Warm"?"🟡":"⚪"} {str} ({grouped[str].length})</div>
-          <div className="space-y-3">{grouped[str].map(c=>{
-            const cel=[];
-            if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)cel.push(`🎂 ${d}d`);}
-            if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)cel.push(`🏆 ${d}d`);}
-            return(<div key={c.id} className={`bg-white border rounded-xl p-4 ${cel.length?"border-pink-200":""}`}>
-              <div className="flex justify-between items-start"><div><div className="font-semibold">{c.name}</div><div className="text-xs text-gray-400">{c.role}{c.role&&c.company?" · ":""}{c.company}</div></div><Badge text={c.industry} color="indigo"/></div>
-              {cel.map((x,i)=><span key={i} className="text-xs text-pink-500 font-medium mr-2">{x}</span>)}
-              {c.notes&&<p className="text-xs text-gray-400 mt-1 italic">"{c.notes}"</p>}
-              <div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>
-              <div className="flex justify-between items-center mt-2">
-                {c.followUp&&<span className="text-xs text-orange-500">📅 {c.followUp}</span>}
-                <div className="ml-auto flex gap-4"><button onClick={()=>openEdit(c)} className="text-xs text-blue-600">Edit</button><button onClick={()=>del(c.id)} className="text-xs text-red-400">Delete</button></div>
-              </div>
-            </div>);
-          })}</div>
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{str} ({grouped[str].length})</div>
+          <div className="space-y-2">
+            {grouped[str].map(c=>{
+              const cel=[];
+              if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)cel.push(`Birthday in ${d}d`);}
+              if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)cel.push(`Anniversary in ${d}d`);}
+              return(
+                <div key={c.id} className={`bg-white border rounded-xl p-4 ${cel.length?"border-rose-200":""}`}>
+                  <div className="flex justify-between items-start">
+                    <div><div className="font-semibold text-gray-800">{c.name}</div><div className="text-xs text-gray-400 mt-0.5">{c.role}{c.role&&c.company?" · ":""}{c.company}</div></div>
+                    <Badge text={c.industry} color="slate"/>
+                  </div>
+                  {cel.map((x,i)=><div key={i} className="text-xs text-rose-500 font-medium mt-1">{x}</div>)}
+                  {c.notes&&<div className="text-xs text-gray-400 mt-1.5 italic">{c.notes}</div>}
+                  {c.tags?.length>0&&<div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>}
+                  <div className="flex justify-between items-center mt-3">
+                    {c.followUp&&<span className="text-xs text-amber-600">Follow-up: {c.followUp}</span>}
+                    <div className="ml-auto flex gap-4">
+                      <button onClick={()=>openEdit(c)} className="text-xs text-blue-600">Edit</button>
+                      <button onClick={()=>del(c.id)} className="text-xs text-red-400">Remove</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ))}
 
-      {modal&&(<div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
-        <div className="bg-white rounded-t-2xl p-5 w-full max-h-[90vh] overflow-y-auto">
-          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
-          <h2 className="font-bold text-lg mb-4">{modal==="add"?"➕ Add":"✏️ Edit"} Contact</h2>
-          <div className="space-y-3">
-            {[["name","Name"],["role","Role / Title"],["company","Company"],["notes","Notes"]].map(([k,l])=>(
-              <div key={k}><label className="text-xs text-gray-500 font-medium">{l}</label><input className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>
-            ))}
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs text-gray-500 font-medium">Industry</label><select className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.industry||"Tech"} onChange={e=>setForm(p=>({...p,industry:e.target.value}))}>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
-              <div><label className="text-xs text-gray-500 font-medium">Strength</label><select className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.strength||"Warm"} onChange={e=>setForm(p=>({...p,strength:e.target.value}))}>{STRENGTHS.map(s=><option key={s}>{s}</option>)}</select></div>
+      {modal&&(
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
+          <div className="bg-white rounded-t-2xl p-5 w-full max-h-[90vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
+            <div className="font-bold text-lg mb-4">{modal==="add"?"Add Contact":"Edit Contact"}</div>
+            <div className="space-y-3">
+              {[["name","Full Name"],["role","Role / Title"],["company","Company"],["notes","Notes"]].map(([k,l])=>(
+                <div key={k}>
+                  <label className="text-xs text-gray-500 font-medium">{l}</label>
+                  <input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/>
+                </div>
+              ))}
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-gray-500 font-medium">Industry</label><select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.industry||"Tech"} onChange={e=>setForm(p=>({...p,industry:e.target.value}))}>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
+                <div><label className="text-xs text-gray-500 font-medium">Strength</label><select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.strength||"Warm"} onChange={e=>setForm(p=>({...p,strength:e.target.value}))}>{STRENGTHS.map(s=><option key={s}>{s}</option>)}</select></div>
+              </div>
+              <div><label className="text-xs text-gray-500 font-medium">Follow-up Date</label><input type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.followUp||""} onChange={e=>setForm(p=>({...p,followUp:e.target.value}))}/></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-gray-500 font-medium">Birthday</label><input type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.birthday||""} onChange={e=>setForm(p=>({...p,birthday:e.target.value}))}/></div>
+                <div><label className="text-xs text-gray-500 font-medium">Work Anniversary</label><input type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.workAnniversary||""} onChange={e=>setForm(p=>({...p,workAnniversary:e.target.value}))}/></div>
+              </div>
+              <div><label className="text-xs text-gray-500 font-medium">Tags (comma separated)</label><input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.tags||""} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="AppSec, CISO, ZeroTrust"/></div>
             </div>
-            <div><label className="text-xs text-gray-500 font-medium">Follow-up</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.followUp||""} onChange={e=>setForm(p=>({...p,followUp:e.target.value}))}/></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-xs text-gray-500 font-medium">🎂 Birthday</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.birthday||""} onChange={e=>setForm(p=>({...p,birthday:e.target.value}))}/></div>
-              <div><label className="text-xs text-gray-500 font-medium">🏆 Anniversary</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.workAnniversary||""} onChange={e=>setForm(p=>({...p,workAnniversary:e.target.value}))}/></div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={saveContact} className="flex-1 bg-slate-800 text-white py-3 rounded-xl text-sm font-semibold">Save</button>
+              <button onClick={()=>setModal(null)} className="flex-1 border border-gray-200 py-3 rounded-xl text-sm text-gray-600">Cancel</button>
             </div>
-            <div><label className="text-xs text-gray-500 font-medium">Tags</label><input className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.tags||""} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="AppSec, AI, CISO"/></div>
           </div>
-          <div className="flex gap-2 mt-5"><button onClick={saveContact} className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-semibold">Save</button><button onClick={()=>setModal(null)} className="flex-1 border py-3 rounded-xl text-sm text-gray-600">Cancel</button></div>
         </div>
-      </div>)}
+      )}
     </div>
   );
 }
@@ -561,46 +686,73 @@ function Schedule({posts,setPosts}){
   const [copied,setCopied]=useState(null);
   const sorted=[...posts].sort((a,b)=>a.date>b.date?1:-1);
   const weeks={};
-  sorted.forEach(p=>{const d=new Date(p.date);const mon=new Date(d);mon.setDate(d.getDate()-d.getDay()+1);const key=mon.toISOString().split("T")[0];if(!weeks[key])weeks[key]=[];weeks[key].push(p);});
-  function handleCopyOpen(p){
-    const text=`${p.title}\n\n${p.body}\n\n#AppSec #ApplicationSecurity #CyberSecurity #AIThreats #DevSecOps`;
-    navigator.clipboard?.writeText(text).then(()=>{setCopied(p.id);setTimeout(()=>setCopied(null),3000);setTimeout(()=>window.open("https://www.linkedin.com/feed/","_blank"),500);});
+  sorted.forEach(p=>{
+    const d=new Date(p.date);const mon=new Date(d);
+    mon.setDate(d.getDate()-d.getDay()+1);
+    const key=mon.toISOString().split("T")[0];
+    if(!weeks[key])weeks[key]=[];weeks[key].push(p);
+  });
+
+  function handlePost(p){
+    const text=`${p.title}\n\n${p.body}\n\n#ApplicationSecurity #CyberSecurity #AppSec`;
+    navigator.clipboard?.writeText(text).then(()=>{
+      setCopied(p.id);
+      setTimeout(()=>setCopied(null),3000);
+      setTimeout(()=>window.open("https://www.linkedin.com/feed/","_blank"),500);
+    });
   }
   function markPublished(p){const u=posts.map(x=>x.id===p.id?{...x,status:"Published"}:x);setPosts(u);ls("posts",u);}
+  function deletePost(id){if(!confirm("Delete this post?"))return;const u=posts.filter(x=>x.id!==id);setPosts(u);ls("posts",u);}
+
   return(
     <div className="space-y-4 pb-6">
-      <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-xl p-4 text-white">
-        <div className="font-bold text-lg">📆 Schedule</div>
-        <div className="text-xs text-blue-200 mt-1">🔐 AppSec Thought Leadership · Tue & Fri · 2/week</div>
-        <div className="flex gap-4 mt-2 text-sm"><span>✅ {posts.filter(p=>p.status==="Published").length} published</span><span>🕐 {posts.filter(p=>p.status==="Scheduled").length} scheduled</span></div>
+      <div className="bg-slate-900 rounded-xl p-4 text-white">
+        <div className="font-bold text-lg">Publishing Schedule</div>
+        <div className="text-xs text-slate-400 mt-1">AppSec Thought Leadership — Tuesday and Friday</div>
+        <div className="flex gap-4 mt-2 text-sm">
+          <span>{posts.filter(p=>p.status==="Published").length} published</span>
+          <span>{posts.filter(p=>p.status==="Scheduled").length} scheduled</span>
+          <span>{posts.filter(p=>p.status==="Draft").length} drafts</span>
+        </div>
       </div>
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800"><strong>💡 To post:</strong> Tap "Copy & Open LinkedIn" → paste → Post!</div>
       {Object.keys(weeks).sort().map(w=>(
-        <div key={w} className="bg-white border rounded-xl overflow-hidden">
-          <div className="bg-gray-50 px-4 py-2.5 border-b flex justify-between items-center"><span className="font-semibold text-sm">Week of {w}</span><span className={`text-xs font-medium px-2 py-0.5 rounded-full ${weeks[w].length>=2?"bg-green-100 text-green-700":"bg-yellow-100 text-yellow-700"}`}>{weeks[w].length}/2</span></div>
+        <div key={w} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="bg-gray-50 px-4 py-2.5 border-b flex justify-between items-center">
+            <span className="font-semibold text-sm text-gray-700">Week of {w}</span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${weeks[w].length>=2?"bg-green-100 text-green-700":"bg-amber-100 text-amber-700"}`}>{weeks[w].length}/2 posts</span>
+          </div>
           {weeks[w].map(p=>(
             <div key={p.id} className="px-4 py-3 border-b last:border-0">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex-1"><div className="font-medium text-sm">{p.title}</div><div className="text-xs text-gray-400 mt-0.5">{p.date}</div></div>
+                <div className="flex-1">
+                  <div className="font-medium text-sm text-gray-800 leading-snug">{p.title}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-400">{p.date}</span>
+                    {p.source&&<Badge text={p.source} color={sourceColor(p.source)}/>}
+                  </div>
+                </div>
                 <Badge text={p.status} color={statusColor(p.status)}/>
               </div>
               {(p.status==="Scheduled"||p.status==="Draft")&&(
                 <div className="flex gap-2 mt-3">
-                  <button onClick={()=>handleCopyOpen(p)} className={`flex-1 text-xs py-2 rounded-xl font-semibold ${copied===p.id?"bg-green-500 text-white":"bg-blue-600 text-white"}`}>{copied===p.id?"✅ Copied!":"📋 Copy & Open LinkedIn"}</button>
-                  {p.status==="Scheduled"&&<button onClick={()=>markPublished(p)} className="text-xs border border-green-300 text-green-600 px-3 py-2 rounded-xl">✅ Done</button>}
+                  <button onClick={()=>handlePost(p)} className={`flex-1 text-xs py-2.5 rounded-xl font-semibold ${copied===p.id?"bg-green-600 text-white":"bg-slate-800 text-white"}`}>
+                    {copied===p.id?"Copied — LinkedIn opening":"Copy and Open LinkedIn"}
+                  </button>
+                  {p.status==="Scheduled"&&<button onClick={()=>markPublished(p)} className="text-xs border border-green-300 text-green-600 px-3 py-2 rounded-xl">Done</button>}
                 </div>
               )}
+              <button onClick={()=>deletePost(p.id)} className="text-xs text-gray-300 mt-2">Remove</button>
             </div>
           ))}
         </div>
       ))}
-      {Object.keys(weeks).length===0&&<p className="text-gray-400 text-sm text-center py-10">No posts yet. Use Auto-Blog to generate one!</p>}
+      {Object.keys(weeks).length===0&&<div className="text-center py-12 text-gray-400 text-sm">No posts yet. Fetch topics and save a draft to get started.</div>}
     </div>
   );
 }
 
-// ── Celebrations ──────────────────────────────────────────────
-function Celebrations({contacts}){
+// ── Events (Celebrations) ─────────────────────────────────────
+function Events({contacts}){
   const [wishModal,setWishModal]=useState(null);
   const [wishText,setWishText]=useState("");
   const [copied,setCopied]=useState(false);
@@ -610,39 +762,65 @@ function Celebrations({contacts}){
     if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));all.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
   });
   all.sort((a,b)=>a.days-b.days);
-  const templates={Birthday:c=>`🎂 Happy Birthday, ${c.name}! Wishing you a wonderful day. Your expertise in ${c.role||"your field"} at ${c.company||"your company"} is truly inspiring. Here's to an incredible year ahead! 🚀`,
-    "Work Anniversary":c=>`🏆 Congratulations on your work anniversary, ${c.name}! Your dedication as ${c.role||"a professional"} at ${c.company||"your company"} is truly valued. Wishing you continued success! 💼`};
-  function openWish(contact,type){setWishModal({contact,type});setWishText(templates[type]?.(contact)||"");setCopied(false);}
-  function copyAndOpen(){navigator.clipboard?.writeText(wishText).then(()=>{setCopied(true);setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.contact.name)}`,"_blank"),400);});}
-  const sections=[{title:"🎉 TODAY",events:all.filter(e=>e.days===0),hi:true},{title:"📅 This Week",events:all.filter(e=>e.days>0&&e.days<=7)},{title:"🗓️ This Month",events:all.filter(e=>e.days>7&&e.days<=30)}];
+
+  const tpl={
+    Birthday:c=>`Happy Birthday, ${c.name}. Wishing you a great day and an even better year ahead. Your work in ${c.role||"the field"} continues to be an inspiration.`,
+    "Work Anniversary":c=>`Congratulations on your work anniversary, ${c.name}. Your contributions as ${c.role||"a professional"} at ${c.company||"your organisation"} speak for themselves. Well deserved.`,
+  };
+
+  function openWish(c,t){setWishModal({c,t});setWishText(tpl[t]?.(c)||"");setCopied(false);}
+  async function copyAndOpen(){
+    await navigator.clipboard?.writeText(wishText);
+    setCopied(true);
+    setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.c.name)}`,"_blank"),400);
+  }
+
+  const sections=[
+    {title:"Today",events:all.filter(e=>e.days===0),urgent:true},
+    {title:"This Week",events:all.filter(e=>e.days>0&&e.days<=7)},
+    {title:"This Month",events:all.filter(e=>e.days>7&&e.days<=30)},
+  ];
+
   return(
     <div className="space-y-5 pb-6">
-      <div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl p-4 text-white">
-        <div className="font-bold text-lg">🎉 Celebrations</div>
-        <div className="flex gap-4 mt-2 text-sm"><span>Today: <strong>{all.filter(e=>e.days===0).length}</strong></span><span>Week: <strong>{all.filter(e=>e.days>0&&e.days<=7).length}</strong></span><span>Month: <strong>{all.filter(e=>e.days<=30).length}</strong></span></div>
+      <div className="bg-slate-900 rounded-xl p-4 text-white">
+        <div className="font-bold text-lg">Birthdays and Anniversaries</div>
+        <div className="flex gap-4 mt-2 text-sm text-slate-300">
+          <span>Today: {all.filter(e=>e.days===0).length}</span>
+          <span>This week: {all.filter(e=>e.days<=7).length}</span>
+          <span>This month: {all.filter(e=>e.days<=30).length}</span>
+        </div>
       </div>
-      {all.length===0&&<p className="text-gray-400 text-sm text-center py-10">Import contacts or add birthdays & anniversaries to see them here!</p>}
+      {all.length===0&&<div className="text-center py-12 text-gray-400 text-sm">Add birthdays and work anniversaries in the Contacts tab to see them here.</div>}
       {sections.map(sec=>sec.events.length>0&&(
         <div key={sec.title}>
-          <div className={`font-semibold text-sm mb-2 ${sec.hi?"text-pink-600":"text-gray-600"}`}>{sec.title}</div>
-          <div className="space-y-2">{sec.events.map((e,i)=>(
-            <div key={i} className={`bg-white border rounded-xl p-4 flex items-center justify-between ${sec.hi?"border-pink-200 bg-pink-50":""}`}>
-              <div><div className="font-semibold">{e.emoji} {e.name}</div><div className="text-xs text-gray-500">{e.role} · {e.company}</div><div className="text-xs text-gray-400 mt-0.5">{e.type}{e.days===0?" — Today! 🎉":` — in ${e.days}d`}</div></div>
-              <button onClick={()=>openWish(e,e.type)} className="bg-pink-500 text-white text-xs px-3 py-2 rounded-xl">✍️ Wish</button>
-            </div>
-          ))}</div>
+          <div className={`font-semibold text-sm mb-2 ${sec.urgent?"text-rose-600":"text-gray-600"}`}>{sec.title}</div>
+          <div className="space-y-2">
+            {sec.events.map((e,i)=>(
+              <div key={i} className={`bg-white border rounded-xl p-4 flex items-center justify-between ${sec.urgent?"border-rose-200":""}`}>
+                <div>
+                  <div className="font-semibold text-gray-800">{e.name}</div>
+                  <div className="text-xs text-gray-500">{e.role} — {e.company}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{e.type}{e.days===0?" — today":` — in ${e.days} days`}</div>
+                </div>
+                <button onClick={()=>openWish(e,e.type)} className="bg-slate-800 text-white text-xs px-3 py-2 rounded-xl">Write wish</button>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
       {wishModal&&(
         <div className="fixed inset-0 bg-black/50 flex items-end z-50">
           <div className="bg-white rounded-t-2xl p-5 w-full">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
-            <h2 className="font-bold text-lg mb-1">{wishModal.type} Wish</h2>
-            <p className="text-sm text-gray-500 mb-3">For <strong>{wishModal.contact.name}</strong></p>
-            <textarea className="w-full border rounded-xl p-3 text-sm h-32 resize-none bg-gray-50" value={wishText} onChange={e=>setWishText(e.target.value)}/>
+            <div className="font-bold text-lg mb-1">{wishModal.t}</div>
+            <div className="text-sm text-gray-500 mb-3">For {wishModal.c.name}</div>
+            <textarea className="w-full border border-gray-200 rounded-xl p-3 text-sm h-32 resize-none bg-gray-50 leading-relaxed" value={wishText} onChange={e=>setWishText(e.target.value)}/>
             <div className="flex gap-2 mt-4">
-              <button onClick={copyAndOpen} className={`flex-1 py-3 rounded-xl text-sm font-semibold ${copied?"bg-green-500 text-white":"bg-pink-500 text-white"}`}>{copied?"✅ Copied! Opening LinkedIn...":"📋 Copy & Find on LinkedIn"}</button>
-              <button onClick={()=>setWishModal(null)} className="border px-4 py-3 rounded-xl text-sm text-gray-600">✕</button>
+              <button onClick={copyAndOpen} className={`flex-1 py-3 rounded-xl text-sm font-semibold ${copied?"bg-green-600 text-white":"bg-slate-800 text-white"}`}>
+                {copied?"Copied — finding on LinkedIn":"Copy and find on LinkedIn"}
+              </button>
+              <button onClick={()=>setWishModal(null)} className="border border-gray-200 px-4 py-3 rounded-xl text-sm text-gray-600">Close</button>
             </div>
           </div>
         </div>
@@ -651,12 +829,12 @@ function Celebrations({contacts}){
   );
 }
 
-// ── App Root ──────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────
 function App(){
   const [tab,setTab]=useState(()=>{
     const p=new URLSearchParams(window.location.search);
-    if(p.get("action")==="autoblog")return "Auto-Blog";
-    return p.get("tab")||"Dashboard";
+    if(p.get("action")==="autoblog")return "Topics";
+    return p.get("tab")||"Home";
   });
   const [contacts,setContacts]=useState(()=>ls("contacts")||sampleContacts);
   const [posts,setPosts]=useState(()=>ls("posts")||samplePosts);
@@ -664,34 +842,40 @@ function App(){
 
   useEffect(()=>{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission();},[]);
 
-  const icons={Dashboard:"🏠","Auto-Blog":"🔐",Contacts:"👥",Schedule:"📅",Celebrations:"🎉"};
-  const todayCel=getUpcomingCelebrations(contacts).filter(e=>e.days===0).length;
+  const icons={Home:"Home",Topics:"Topics",Contacts:"People",Schedule:"Schedule",Events:"Events"};
+  const todayCel=getCelebrations(contacts).filter(e=>e.days===0).length;
 
   return(
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {showBixby&&<BixbyGuide onClose={()=>setShowBixby(false)}/>}
-      <div className="bg-white border-b sticky top-0 z-40 safe-top">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40 safe-top">
         <div className="px-4 pt-3 pb-2">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-slate-800 to-blue-700 rounded-xl flex items-center justify-center text-white font-bold text-xs">🔐</div>
-            <div><div className="font-bold text-gray-800 text-sm">LinkedIn Pro Manager</div><div className="text-xs text-gray-400">AppSec Thought Leadership · Checkmarx Zero</div></div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xs">Li</div>
+            <div>
+              <div className="font-bold text-gray-900 text-sm leading-tight">LinkedIn Pro Manager</div>
+              <div className="text-xs text-gray-400">AppSec Thought Leadership</div>
+            </div>
           </div>
           <div className="flex gap-1">
             {TABS.map(t=>(
-              <button key={t} onClick={()=>setTab(t)} className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-blue-600 text-white":"text-gray-500"}`}>
-                {icons[t]}
-                {t==="Celebrations"&&todayCel>0&&<span className="absolute -top-1 -right-0.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{todayCel}</span>}
+              <button key={t} onClick={()=>setTab(t)}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-slate-900 text-white":"text-gray-500 hover:bg-gray-100"}`}>
+                {t}
+                {t==="Events"&&todayCel>0&&(
+                  <span className="absolute -top-1 -right-0.5 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center leading-none">{todayCel}</span>
+                )}
               </button>
             ))}
           </div>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4 pt-4 safe-bottom">
-        {tab==="Dashboard"&&<Dashboard contacts={contacts} posts={posts} setTab={setTab} showBixby={()=>setShowBixby(true)}/>}
-        {tab==="Auto-Blog"&&<AutoBlog posts={posts} setPosts={setPosts}/>}
+        {tab==="Home"&&<Home contacts={contacts} posts={posts} setTab={setTab} showBixby={()=>setShowBixby(true)}/>}
+        {tab==="Topics"&&<Topics posts={posts} setPosts={setPosts}/>}
         {tab==="Contacts"&&<Contacts contacts={contacts} setContacts={setContacts}/>}
         {tab==="Schedule"&&<Schedule posts={posts} setPosts={setPosts}/>}
-        {tab==="Celebrations"&&<Celebrations contacts={contacts}/>}
+        {tab==="Events"&&<Events contacts={contacts}/>}
       </div>
     </div>
   );
