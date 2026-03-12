@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="Li Manager"/>
+  <link rel="manifest" href="manifest.json"/>
+  <title>LinkedIn Pro Manager</title>
+  <!-- All manifest data is also inline so it works even without manifest.json -->
+  <script>
+    // Inline manifest registration for GitHub Pages reliability
+    if('serviceWorker' in navigator){
+      const swCode=`
+        const CACHE="li-v2";
+        const ASSETS=["/li-manager/","/li-manager/index.html"];
+        self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS).catch(()=>{})));self.skipWaiting();});
+        self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
+        self.addEventListener("fetch",e=>{if(e.request.url.includes("anthropic")||e.request.url.includes("rss")||e.request.url.includes("openai"))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});
+      `;
+      const blob=new Blob([swCode],{type:"application/javascript"});
+      const swUrl=URL.createObjectURL(blob);
+      window.addEventListener("load",()=>navigator.serviceWorker.register(swUrl).catch(()=>{}));
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;overscroll-behavior-y:none}
+    textarea,input,select{font-size:16px!important}
+    ::-webkit-scrollbar{display:none}
+    .safe-top{padding-top:env(safe-area-inset-top)}
+    .safe-bottom{padding-bottom:env(safe-area-inset-bottom)}
+    @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.5}}
+    .pulse{animation:pulse2 2s infinite}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef}=React;
+
+const TABS=["Dashboard","Auto-Blog","Contacts","Schedule","Celebrations"];
+const TOPICS_WEEK1=["AI & Application Security","AppSec Best Practices","AI in Cybersecurity","Zero Trust & AI","Threat Detection with AI"];
+const TOPICS_WEEK2=["Sales Engineering 101","Demo Techniques","SE Career Growth","Technical Sales Strategy","Customer Discovery"];
+const ALL_TOPICS=[...TOPICS_WEEK1,...TOPICS_WEEK2];
+const STRENGTHS=["Strong","Warm","Cold"];
+const INDUSTRIES=["Tech","Cybersecurity","Sales","Fintech","Healthcare","SaaS","Other"];
+const STATUSES=["Draft","Scheduled","Published"];
+
+// RSS proxy services (tries multiple for CORS)
+const APP_URL="https://cxsmtp.github.io/LinkHelp/";
+const RSS_PROXIES=[
+  url=>`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`,
+  url=>`https://rssproxy.migor.org/api/rss?url=${encodeURIComponent(url)}&out=json`,
+];
+const CHECKMARX_RSS="https://checkmarx.com/feed/";
+
+const sampleContacts=[
+  {id:1,name:"Priya Sharma",role:"CISO",company:"CloudShield",industry:"Cybersecurity",strength:"Strong",followUp:"2026-03-18",birthday:"1988-07-15",workAnniversary:"2020-03-01",notes:"Met at Black Hat 2025",tags:["AppSec","CISO"]},
+  {id:2,name:"Marcus Lee",role:"Sales Engineer",company:"Palo Alto Networks",industry:"Cybersecurity",strength:"Warm",followUp:"2026-03-22",birthday:"1990-03-20",workAnniversary:"2022-06-10",notes:"Interested in SE best practices",tags:["Sales","SE"]},
+  {id:3,name:"Ananya Iyer",role:"AppSec Lead",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Collaboration on AI threat modeling",tags:["AppSec","AI"]},
+];
+const samplePosts=[
+  {id:1,title:"How AI is Redefining Application Security in 2026",body:"AI is no longer just a tool for attackers...",status:"Published",date:"2026-03-05",topic:"AI & Application Security"},
+  {id:2,title:"The SE's Secret Weapon: Mastering the Technical Demo",body:"Every great Sales Engineer knows that a demo isn't just a product tour...",status:"Scheduled",date:"2026-03-14",topic:"Sales Engineering 101"},
+];
+
+function ls(key,val){try{if(val!==undefined)localStorage.setItem(key,JSON.stringify(val));else{const v=localStorage.getItem(key);return v?JSON.parse(v):null;}}catch(e){return null;}}
+function getDaysUntil(mmdd){
+  const today=new Date(),t0=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  const[m,d]=mmdd.split("-").map(Number);
+  let next=new Date(today.getFullYear(),m-1,d);
+  if(next<t0)next.setFullYear(today.getFullYear()+1);
+  return Math.round((next-t0)/86400000);
+}
+function getUpcomingCelebrations(contacts){
+  const ev=[];
+  contacts.forEach(c=>{
+    if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)ev.push({...c,type:"Birthday",emoji:"🎂",days:d});}
+    if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)ev.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
+  });
+  return ev.sort((a,b)=>a.days-b.days);
+}
+
+function Badge({text,color="blue"}){
+  const c={blue:"bg-blue-100 text-blue-700",green:"bg-green-100 text-green-700",yellow:"bg-yellow-100 text-yellow-800",red:"bg-red-100 text-red-700",purple:"bg-purple-100 text-purple-700",gray:"bg-gray-100 text-gray-600",orange:"bg-orange-100 text-orange-700",pink:"bg-pink-100 text-pink-700",indigo:"bg-indigo-100 text-indigo-700"};
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[color]||c.blue}`}>{text}</span>;
+}
+function statusColor(s){return s==="Published"?"green":s==="Scheduled"?"blue":"gray";}
+
+// ── Fetch Checkmarx RSS ───────────────────────────────────────
+async function fetchCheckmarxPosts(){
+  for(const makeUrl of RSS_PROXIES){
+    try{
+      const res=await fetch(makeUrl(CHECKMARX_RSS),{signal:AbortSignal.timeout(8000)});
+      const data=await res.json();
+      // rss2json format
+      if(data.items&&data.items.length>0){
+        return data.items.slice(0,5).map(i=>({
+          title:i.title,
+          link:i.link||i.url,
+          summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").slice(0,300),
+          date:i.pubDate||i.published||"",
+        }));
+      }
+    }catch(e){continue;}
+  }
+  throw new Error("Could not fetch Checkmarx blog. Check internet connection.");
+}
+
+// ── Build ChatGPT prompt ──────────────────────────────────────
+function buildPrompt(article,week){
+  const theme=week%2===0?"Sales Engineering 101":"AI & Application Security";
+  return `You are a LinkedIn thought leader who specializes in ${theme}.
+
+Based on this recent Checkmarx blog post:
+Title: "${article.title}"
+Summary: "${article.summary}"
+Link: ${article.link}
+
+Write a compelling LinkedIn blog post that:
+1. References the Checkmarx insight as inspiration
+2. Adds my personal perspective as a professional in ${theme}
+3. Is 3-4 paragraphs, under 600 words
+4. Uses relevant emojis
+5. Ends with 3-5 hashtags including #AppSec #LinkedIn
+6. Has a strong hook in the first line
+
+Write the full post ready to copy-paste to LinkedIn.`;
+}
+
+// ── Open ChatGPT app with prompt ─────────────────────────────
+function openChatGPT(prompt){
+  // Copy prompt to clipboard first
+  navigator.clipboard?.writeText(prompt).catch(()=>{});
+  // Try ChatGPT deep link (works if ChatGPT app installed)
+  const deepLink=`chatgpt://ask?q=${encodeURIComponent(prompt.slice(0,500))}`;
+  // Fallback to web
+  const webUrl=`https://chat.openai.com/`;
+  // Try app first, fall back to web after 1.5s
+  window.location.href=deepLink;
+  setTimeout(()=>window.open(webUrl,"_blank"),1500);
+}
+
+// ── Bixby Guide ───────────────────────────────────────────────
+function BixbyGuide({onClose}){
+  const appUrl=APP_URL;
+  const triggerUrl=APP_URL+"?action=autoblog";
+  const steps=[
+    {n:1,icon:"⚙️",title:"Open Bixby Routines",desc:'Go to Settings → Advanced Features → Bixby Routines'},
+    {n:2,icon:"➕",title:'Create New Routine',desc:'Tap "+" → name it "LinkedIn Auto Blog"'},
+    {n:3,icon:"🕘",title:"Set IF: Time Trigger",desc:'Tap IF → Time → 9:00 AM → Repeat: Every Tuesday & Friday'},
+    {n:4,icon:"📱",title:"Set THEN: Open App",desc:`Tap THEN → Open App → Chrome/Samsung Internet → enter this URL (tap to copy):\n${triggerUrl}`},
+    {n:5,icon:"🔔",title:"Add notification (optional)",desc:'Tap + → Send Notification → "📝 Blog post time! Checkmarx topic loading..."'},
+    {n:6,icon:"✅",title:"Save & Enable",desc:'Save the routine and toggle it ON. Every Tue & Fri at 9AM your app will auto-open, fetch the latest Checkmarx post, and launch ChatGPT with the prompt ready!'},
+  ];
+  return(
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end">
+      <div className="bg-white rounded-t-2xl w-full max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b">
+          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"/>
+          <div className="flex justify-between items-center">
+            <div><div className="font-bold text-lg">⚡ Bixby Routines Setup</div><div className="text-xs text-gray-400">Auto-trigger every Tue & Fri at 9AM</div></div>
+            <button onClick={onClose} className="text-gray-400 text-2xl">×</button>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
+            <strong>What happens automatically:</strong> Bixby opens your app at 9AM → app fetches latest Checkmarx blog → builds prompt → opens ChatGPT with it ready → you just hit Send 🚀
+          </div>
+          {steps.map(s=>(
+            <div key={s.n} className="flex gap-3 bg-gray-50 rounded-xl p-4">
+              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">{s.n}</div>
+              <div><div className="font-semibold text-sm">{s.icon} {s.title}</div><div className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{s.desc}</div></div>
+            </div>
+          ))}
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="font-semibold text-green-800 text-sm mb-2">📋 Your Trigger URL (tap to copy)</div>
+            <div className="text-xs font-mono break-all bg-white rounded-lg p-2 border border-green-200 text-green-700"
+              onClick={()=>{navigator.clipboard?.writeText(triggerUrl);alert("✅ Copied! Paste this into Bixby's Open App URL field.");}}>
+              {triggerUrl}
+            </div>
+            <div className="text-xs text-green-600 mt-1">Tap above to copy → paste into Bixby "Open App" action</div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-700 space-y-1">
+            <div className="font-semibold">💡 Make sure you have:</div>
+            <div>✅ ChatGPT app installed on your Samsung</div>
+            <div>✅ This app added to Home Screen (installed as PWA)</div>
+            <div>✅ Internet on Tuesday & Friday morning</div>
+          </div>
+          <button onClick={onClose} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm">Got it! ✅</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AUTO BLOG TAB ─────────────────────────────────────────────
+function AutoBlog({posts,setPosts}){
+  const [status,setStatus]=useState("idle"); // idle | fetching | ready | error
+  const [articles,setArticles]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [prompt,setPrompt]=useState("");
+  const [copied,setCopied]=useState(false);
+  const [showPrompt,setShowPrompt]=useState(false);
+  const week=Math.ceil(new Date().getDate()/7);
+  const theme=week%2===0?"Sales Engineering 101":"AI & Application Security";
+
+  // Auto-trigger if opened via Bixby URL param
+  useEffect(()=>{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get("action")==="autoblog") fetchArticles();
+  },[]);
+
+  async function fetchArticles(){
+    setStatus("fetching");setArticles([]);setSelected(null);setPrompt("");
+    try{
+      const items=await fetchCheckmarxPosts();
+      setArticles(items);
+      setSelected(items[0]);
+      setPrompt(buildPrompt(items[0],week));
+      setStatus("ready");
+    }catch(e){
+      setStatus("error");
+    }
+  }
+
+  function selectArticle(a){
+    setSelected(a);
+    setPrompt(buildPrompt(a,week));
+    setCopied(false);
+  }
+
+  function handleOpenChatGPT(){
+    navigator.clipboard?.writeText(prompt).then(()=>{
+      setCopied(true);
+      setTimeout(()=>{
+        // Try ChatGPT deep link first
+        const deepLink=`chatgpt://`;
+        window.location.href=deepLink;
+        setTimeout(()=>window.open("https://chat.openai.com/","_blank"),1500);
+      },300);
+    }).catch(()=>{
+      window.open("https://chat.openai.com/","_blank");
+    });
+  }
+
+  function saveAsDraft(){
+    if(!selected)return;
+    const post={id:Date.now(),title:`[Draft] ${selected.title}`,body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],topic:theme};
+    const updated=[...posts,post];
+    setPosts(updated);ls("posts",updated);
+    alert("✅ Saved as draft in Schedule tab!");
+  }
+
+  return(
+    <div className="space-y-4 pb-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-green-600 to-teal-700 rounded-xl p-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-2xl">🤖</span>
+          <div className="font-bold text-lg">Auto Blog Generator</div>
+        </div>
+        <div className="text-xs text-green-100">Fetches latest Checkmarx post → builds prompt → opens ChatGPT</div>
+        <div className="mt-2 flex items-center gap-2">
+          <Badge text={`This week: ${theme.includes("AI")?"🔐 AppSec":"🤝 SE"}`} color="green"/>
+          {status==="ready"&&<Badge text="✅ Ready" color="green"/>}
+          {status==="fetching"&&<Badge text="⏳ Fetching..." color="yellow"/>}
+          {status==="error"&&<Badge text="❌ Error" color="red"/>}
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div className="bg-white border rounded-xl p-4">
+        <div className="font-semibold text-sm text-gray-700 mb-3">⚡ Automated Flow</div>
+        <div className="flex items-center gap-1 text-xs text-gray-500 flex-wrap">
+          {["Bixby 9AM","→","Fetch Checkmarx","→","Build Prompt","→","Open ChatGPT","→","You hit Send ✅"].map((s,i)=>(
+            <span key={i} className={s==="→"?"text-gray-300":s.includes("✅")?"text-green-600 font-semibold":"bg-gray-100 px-2 py-1 rounded-full font-medium"}>{s}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Fetch button */}
+      {status==="idle"&&(
+        <button onClick={fetchArticles} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-base active:bg-green-700 shadow-md">
+          🔄 Fetch Latest Checkmarx Post
+        </button>
+      )}
+
+      {/* Fetching state */}
+      {status==="fetching"&&(
+        <div className="bg-white border rounded-xl p-8 text-center">
+          <div className="text-3xl pulse mb-3">🌐</div>
+          <div className="font-semibold text-gray-700">Fetching from Checkmarx blog...</div>
+          <div className="text-xs text-gray-400 mt-1">Reading latest AppSec articles</div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {status==="error"&&(
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
+          <div className="text-3xl mb-2">❌</div>
+          <div className="font-semibold text-red-700">Could not fetch Checkmarx blog</div>
+          <div className="text-xs text-red-400 mt-1 mb-4">Make sure you have internet access</div>
+          <button onClick={fetchArticles} className="bg-red-500 text-white px-6 py-2 rounded-xl text-sm font-medium">Try Again</button>
+        </div>
+      )}
+
+      {/* Articles list */}
+      {status==="ready"&&articles.length>0&&(
+        <>
+          <div className="font-semibold text-sm text-gray-700">📰 Latest Checkmarx Posts — pick one:</div>
+          <div className="space-y-2">
+            {articles.map((a,i)=>(
+              <button key={i} onClick={()=>selectArticle(a)}
+                className={`w-full text-left border rounded-xl p-3 transition ${selected?.title===a.title?"border-green-500 bg-green-50":"bg-white border-gray-200 active:bg-gray-50"}`}>
+                <div className="flex items-start gap-2">
+                  <span className="text-lg shrink-0">{selected?.title===a.title?"✅":"📄"}</span>
+                  <div>
+                    <div className="font-medium text-sm text-gray-800">{a.title}</div>
+                    {a.date&&<div className="text-xs text-gray-400 mt-0.5">{new Date(a.date).toLocaleDateString()}</div>}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Prompt preview */}
+          {selected&&(
+            <div className="bg-white border rounded-xl overflow-hidden">
+              <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3 text-sm font-semibold text-gray-700">
+                <span>📝 ChatGPT Prompt Preview</span>
+                <span className="text-gray-400">{showPrompt?"▲":"▼"}</span>
+              </button>
+              {showPrompt&&(
+                <div className="px-4 pb-4">
+                  <textarea className="w-full border rounded-xl p-3 text-xs h-40 resize-none bg-gray-50 text-gray-600" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+                  <div className="text-xs text-gray-400 mt-1">You can edit this prompt before sending</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="space-y-3">
+            <button onClick={handleOpenChatGPT}
+              className={`w-full py-4 rounded-xl font-bold text-base shadow-md transition ${copied?"bg-green-500 text-white":"bg-[#10a37f] text-white active:opacity-90"}`}>
+              {copied?"✅ Prompt Copied! ChatGPT Opening...":"🤖 Copy Prompt & Open ChatGPT"}
+            </button>
+            <div className="text-xs text-center text-gray-400">Prompt is copied to clipboard → paste it in ChatGPT → hit Send</div>
+            <div className="flex gap-2">
+              <button onClick={saveAsDraft} className="flex-1 border border-blue-300 text-blue-600 py-2.5 rounded-xl text-sm font-medium active:bg-blue-50">💾 Save as Draft</button>
+              <button onClick={()=>{setStatus("idle");setArticles([]);}} className="flex-1 border text-gray-500 py-2.5 rounded-xl text-sm font-medium active:bg-gray-50">🔄 Refresh</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bixby reminder */}
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+        <div className="font-semibold text-violet-800 text-sm">⚡ Automate with Bixby</div>
+        <div className="text-xs text-violet-600 mt-1">Set up Bixby to trigger this tab every Tue & Fri at 9AM automatically — no manual tapping needed.</div>
+        <div className="text-xs text-violet-500 mt-2 font-mono break-all">{window.location.href.split("?")[0]}?action=autoblog</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+function Dashboard({contacts,posts,setTab,showBixby}){
+  const cel=getUpcomingCelebrations(contacts);
+  const today=cel.filter(e=>e.days===0);
+  const week7=cel.filter(e=>e.days>0&&e.days<=7);
+  const strong=contacts.filter(c=>c.strength==="Strong").length;
+  const wk=Math.ceil(new Date().getDate()/7);
+  const nextTheme=wk%2===0?"Sales Engineering 101":"AI & Application Security";
+  const notifGranted="Notification" in window&&Notification.permission==="granted";
+
+  return(
+    <div className="space-y-4 pb-6">
+      {today.length>0&&<div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl p-4 text-white"><div className="font-bold">🎉 Today's Celebrations!</div>{today.map((e,i)=><div key={i} className="text-sm mt-1">{e.emoji} {e.type} — <strong>{e.name}</strong></div>)}</div>}
+
+      {/* Auto Blog CTA */}
+      <button onClick={()=>setTab("Auto-Blog")} className="w-full bg-gradient-to-r from-green-600 to-teal-600 rounded-xl p-4 text-white text-left active:opacity-90">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-bold text-lg">🤖 Auto Blog</div>
+            <div className="text-xs text-green-100 mt-0.5">Fetch Checkmarx → Prompt → ChatGPT</div>
+          </div>
+          <div className="text-3xl">→</div>
+        </div>
+      </button>
+
+      {/* Bixby Banner */}
+      <div className="bg-gradient-to-r from-violet-600 to-purple-700 rounded-xl p-4 text-white">
+        <div className="flex justify-between items-start">
+          <div><div className="font-bold">⚡ Bixby Schedule</div><div className="text-xs text-purple-200 mt-0.5">Auto-trigger every Tue & Fri 9AM</div></div>
+          {notifGranted&&<Badge text="Active ✅" color="green"/>}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={showBixby} className="bg-white text-purple-700 text-xs font-bold px-3 py-2 rounded-lg">📖 Setup Guide</button>
+          {!notifGranted&&<button onClick={()=>Notification.requestPermission()} className="border border-purple-300 text-white text-xs px-3 py-2 rounded-lg">🔔 Enable Alerts</button>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[{label:"Total Contacts",value:contacts.length,icon:"👥",color:"bg-blue-50 border-blue-200",tab:"Contacts"},{label:"Strong Connections",value:strong,icon:"💼",color:"bg-green-50 border-green-200",tab:"Contacts"},{label:"Posts Published",value:posts.filter(p=>p.status==="Published").length,icon:"✅",color:"bg-purple-50 border-purple-200",tab:"Schedule"},{label:"Upcoming Events",value:cel.length,icon:"🎂",color:"bg-pink-50 border-pink-200",tab:"Celebrations"}].map(card=>(
+          <button key={card.label} onClick={()=>setTab(card.tab)} className={`${card.color} border rounded-xl p-3 text-left active:scale-95 transition-transform`}>
+            <div className="text-xl">{card.icon}</div>
+            <div className="text-2xl font-bold text-gray-800">{card.value}</div>
+            <div className="text-xs text-gray-500">{card.label}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-gradient-to-r from-slate-800 to-blue-900 rounded-xl p-4 text-white">
+        <div className="text-xs text-blue-300 font-medium mb-1">THIS WEEK'S THEME</div>
+        <div className="font-bold">{nextTheme.includes("AI")?"🔐":"🤝"} {nextTheme}</div>
+        <div className="text-xs text-blue-200 mt-1">Tue & Fri · 2 posts/week</div>
+      </div>
+
+      {week7.length>0&&<div className="bg-white border rounded-xl p-4"><h3 className="font-semibold text-gray-700 mb-3">🔔 This Week</h3>{week7.map((e,i)=><div key={i} className="flex items-center justify-between py-2 border-b last:border-0"><div><div className="font-medium text-sm">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div><div className="flex gap-1 items-center"><span>{e.emoji}</span><Badge text={`${e.days}d`} color="pink"/></div></div>)}</div>}
+
+      <div className="bg-white border rounded-xl p-4">
+        <h3 className="font-semibold text-gray-700 mb-3">💼 Connection Strength</h3>
+        {STRENGTHS.map(s=>{const count=contacts.filter(c=>c.strength===s).length;const pct=contacts.length?Math.round(count/contacts.length*100):0;return(<div key={s} className="mb-2"><div className="flex justify-between text-xs text-gray-600 mb-1"><span>{s}</span><span>{count}</span></div><div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${s==="Strong"?"bg-green-500":s==="Warm"?"bg-yellow-400":"bg-gray-300"}`} style={{width:`${pct}%`}}/></div></div>);})}
+      </div>
+    </div>
+  );
+}
+
+// ── Contacts ──────────────────────────────────────────────────
+function Contacts({contacts,setContacts}){
+  const [search,setSearch]=useState("");
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({});
+  const [activeStr,setActiveStr]=useState("All");
+  const filtered=contacts.filter(c=>(activeStr==="All"||c.strength===activeStr)&&(c.name.toLowerCase().includes(search.toLowerCase())||c.company.toLowerCase().includes(search.toLowerCase())));
+  const grouped={Strong:filtered.filter(c=>c.strength==="Strong"),Warm:filtered.filter(c=>c.strength==="Warm"),Cold:filtered.filter(c=>c.strength==="Cold")};
+  function openAdd(){setForm({name:"",role:"",company:"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"",tags:""});setModal("add");}
+  function openEdit(c){setForm({...c,tags:c.tags.join(", ")});setModal("edit");}
+  function saveContact(){
+    const contact={...form,tags:form.tags?form.tags.split(",").map(t=>t.trim()).filter(Boolean):[]};
+    let u=modal==="add"?[...contacts,{...contact,id:Date.now()}]:contacts.map(c=>c.id===form.id?contact:c);
+    setContacts(u);ls("contacts",u);setModal(null);
+  }
+  function del(id){const u=contacts.filter(c=>c.id!==id);setContacts(u);ls("contacts",u);}
+  return(
+    <div className="space-y-4 pb-6">
+      <div className="flex gap-2"><input className="border rounded-xl px-3 py-2.5 text-sm flex-1 bg-white" placeholder="🔍 Search..." value={search} onChange={e=>setSearch(e.target.value)}/><button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium">+ Add</button></div>
+      <div className="flex gap-2 overflow-x-auto pb-1">{["All",...STRENGTHS].map(s=><button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${activeStr===s?"bg-blue-600 text-white":"bg-white border text-gray-600"}`}>{s}{s!=="All"?` (${contacts.filter(c=>c.strength===s).length})`:""}</button>)}</div>
+      {(activeStr==="All"?STRENGTHS:[activeStr]).map(str=>grouped[str]?.length>0&&(
+        <div key={str}>
+          <div className="text-sm font-bold text-gray-600 mb-2">{str==="Strong"?"💚":str==="Warm"?"🟡":"⚪"} {str}</div>
+          <div className="space-y-3">{grouped[str].map(c=>{
+            const cel=[];
+            if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)cel.push(`🎂 ${d}d`);}
+            if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)cel.push(`🏆 ${d}d`);}
+            return(<div key={c.id} className={`bg-white border rounded-xl p-4 ${cel.length?"border-pink-200":""}`}>
+              <div className="flex justify-between items-start"><div><div className="font-semibold">{c.name}</div><div className="text-xs text-gray-400">{c.role} · {c.company}</div></div><Badge text={c.industry} color="indigo"/></div>
+              {cel.map((x,i)=><span key={i} className="text-xs text-pink-500 font-medium mr-2">{x}</span>)}
+              {c.notes&&<p className="text-xs text-gray-400 mt-1 italic">"{c.notes}"</p>}
+              <div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>
+              <div className="flex justify-between items-center mt-2">{c.followUp&&<span className="text-xs text-orange-500">📅 {c.followUp}</span>}<div className="ml-auto flex gap-4"><button onClick={()=>openEdit(c)} className="text-xs text-blue-600">Edit</button><button onClick={()=>del(c.id)} className="text-xs text-red-400">Delete</button></div></div>
+            </div>);
+          })}</div>
+        </div>
+      ))}
+      {modal&&(<div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
+        <div className="bg-white rounded-t-2xl p-5 w-full max-h-[90vh] overflow-y-auto">
+          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
+          <h2 className="font-bold text-lg mb-4">{modal==="add"?"➕ Add":"✏️ Edit"} Contact</h2>
+          <div className="space-y-3">
+            {[["name","Name"],["role","Role"],["company","Company"],["notes","Notes"]].map(([k,l])=>(
+              <div key={k}><label className="text-xs text-gray-500 font-medium">{l}</label><input className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>
+            ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-gray-500 font-medium">Industry</label><select className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.industry||"Tech"} onChange={e=>setForm(p=>({...p,industry:e.target.value}))}>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
+              <div><label className="text-xs text-gray-500 font-medium">Strength</label><select className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.strength||"Warm"} onChange={e=>setForm(p=>({...p,strength:e.target.value}))}>{STRENGTHS.map(s=><option key={s}>{s}</option>)}</select></div>
+            </div>
+            <div><label className="text-xs text-gray-500 font-medium">Follow-up</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.followUp||""} onChange={e=>setForm(p=>({...p,followUp:e.target.value}))}/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-gray-500 font-medium">🎂 Birthday</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.birthday||""} onChange={e=>setForm(p=>({...p,birthday:e.target.value}))}/></div>
+              <div><label className="text-xs text-gray-500 font-medium">🏆 Anniversary</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.workAnniversary||""} onChange={e=>setForm(p=>({...p,workAnniversary:e.target.value}))}/></div>
+            </div>
+            <div><label className="text-xs text-gray-500 font-medium">Tags</label><input className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.tags||""} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="AppSec, AI, Sales"/></div>
+          </div>
+          <div className="flex gap-2 mt-5"><button onClick={saveContact} className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-semibold">Save</button><button onClick={()=>setModal(null)} className="flex-1 border py-3 rounded-xl text-sm text-gray-600">Cancel</button></div>
+        </div>
+      </div>)}
+    </div>
+  );
+}
+
+// ── Schedule ──────────────────────────────────────────────────
+function Schedule({posts,setPosts}){
+  const [copied,setCopied]=useState(null);
+  const sorted=[...posts].sort((a,b)=>a.date>b.date?1:-1);
+  const weeks={};
+  sorted.forEach(p=>{const d=new Date(p.date);const mon=new Date(d);mon.setDate(d.getDate()-d.getDay()+1);const key=mon.toISOString().split("T")[0];if(!weeks[key])weeks[key]=[];weeks[key].push(p);});
+  function handleCopyOpen(p){
+    const text=`${p.title}\n\n${p.body}\n\n#${p.topic.replace(/[^a-zA-Z]/g,"")} #LinkedIn #AppSec`;
+    navigator.clipboard?.writeText(text).then(()=>{setCopied(p.id);setTimeout(()=>setCopied(null),3000);setTimeout(()=>window.open("https://www.linkedin.com/feed/","_blank"),500);});
+  }
+  function markPublished(p){const u=posts.map(x=>x.id===p.id?{...x,status:"Published"}:x);setPosts(u);ls("posts",u);}
+  return(
+    <div className="space-y-4 pb-6">
+      <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-xl p-4 text-white">
+        <div className="font-bold text-lg">📆 Schedule</div>
+        <div className="text-xs text-blue-200 mt-1">🔐 AppSec ↔ 🤝 SE · Tue & Fri · 2/week</div>
+        <div className="flex gap-4 mt-2 text-sm"><span>✅ {posts.filter(p=>p.status==="Published").length} published</span><span>🕐 {posts.filter(p=>p.status==="Scheduled").length} scheduled</span></div>
+      </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800"><strong>💡 To post:</strong> Tap "Copy & Open LinkedIn" → paste in LinkedIn app → Post!</div>
+      {Object.keys(weeks).sort().map(w=>(
+        <div key={w} className="bg-white border rounded-xl overflow-hidden">
+          <div className="bg-gray-50 px-4 py-2.5 border-b flex justify-between items-center"><span className="font-semibold text-sm">Week of {w}</span><span className={`text-xs font-medium px-2 py-0.5 rounded-full ${weeks[w].length>=2?"bg-green-100 text-green-700":"bg-yellow-100 text-yellow-700"}`}>{weeks[w].length}/2</span></div>
+          {weeks[w].map(p=>(
+            <div key={p.id} className="px-4 py-3 border-b last:border-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1"><div className="font-medium text-sm">{p.title}</div><div className="text-xs text-gray-400 mt-0.5">{p.topic} · {p.date}</div></div>
+                <div className="flex flex-col gap-1 items-end shrink-0"><Badge text={p.status} color={statusColor(p.status)}/><Badge text={TOPICS_WEEK1.includes(p.topic)?"🔐":"🤝"} color={TOPICS_WEEK1.includes(p.topic)?"indigo":"orange"}/></div>
+              </div>
+              {(p.status==="Scheduled"||p.status==="Draft")&&(
+                <div className="flex gap-2 mt-3">
+                  <button onClick={()=>handleCopyOpen(p)} className={`flex-1 text-xs py-2 rounded-xl font-semibold ${copied===p.id?"bg-green-500 text-white":"bg-blue-600 text-white"}`}>{copied===p.id?"✅ Copied!":"📋 Copy & Open LinkedIn"}</button>
+                  {p.status==="Scheduled"&&<button onClick={()=>markPublished(p)} className="text-xs border border-green-300 text-green-600 px-3 py-2 rounded-xl">✅ Done</button>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      {Object.keys(weeks).length===0&&<p className="text-gray-400 text-sm text-center py-10">No posts yet. Use Auto-Blog tab to generate one!</p>}
+    </div>
+  );
+}
+
+// ── Celebrations ──────────────────────────────────────────────
+function Celebrations({contacts}){
+  const [wishModal,setWishModal]=useState(null);
+  const [wishText,setWishText]=useState("");
+  const [copied,setCopied]=useState(false);
+  const all=[];
+  contacts.forEach(c=>{
+    if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));all.push({...c,type:"Birthday",emoji:"🎂",days:d});}
+    if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));all.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
+  });
+  all.sort((a,b)=>a.days-b.days);
+  const sections=[{title:"🎉 TODAY",events:all.filter(e=>e.days===0),hi:true},{title:"📅 This Week",events:all.filter(e=>e.days>0&&e.days<=7)},{title:"🗓️ This Month",events:all.filter(e=>e.days>7&&e.days<=30)}];
+  const templates={Birthday:(c)=>`🎂 Happy Birthday, ${c.name}! Wishing you a wonderful day filled with joy. Your work in ${c.role} at ${c.company} is truly inspiring. Here's to an amazing year ahead! 🚀`,
+    "Work Anniversary":(c)=>`🏆 Congratulations on your work anniversary, ${c.name}! Your contributions as ${c.role} at ${c.company} are truly valued. Wishing you continued success! 💼`};
+  function openWish(contact,type){setWishModal({contact,type});setWishText(templates[type]?.(contact)||"");setCopied(false);}
+  function copyAndOpen(){
+    navigator.clipboard?.writeText(wishText).then(()=>{setCopied(true);setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.contact.name)}`,"_blank"),400);});
+  }
+  return(
+    <div className="space-y-5 pb-6">
+      <div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl p-4 text-white">
+        <div className="font-bold text-lg">🎉 Celebrations</div>
+        <div className="flex gap-4 mt-2 text-sm"><span>Today: <strong>{all.filter(e=>e.days===0).length}</strong></span><span>Week: <strong>{all.filter(e=>e.days>0&&e.days<=7).length}</strong></span><span>Month: <strong>{all.filter(e=>e.days<=30).length}</strong></span></div>
+      </div>
+      {all.length===0&&<p className="text-gray-400 text-sm text-center py-10">Add birthdays & anniversaries in Contacts to see them here!</p>}
+      {sections.map(sec=>sec.events.length>0&&(
+        <div key={sec.title}>
+          <div className={`font-semibold text-sm mb-2 ${sec.hi?"text-pink-600":"text-gray-600"}`}>{sec.title}</div>
+          <div className="space-y-2">{sec.events.map((e,i)=>(
+            <div key={i} className={`bg-white border rounded-xl p-4 flex items-center justify-between ${sec.hi?"border-pink-200 bg-pink-50":""}`}>
+              <div><div className="font-semibold">{e.emoji} {e.name}</div><div className="text-xs text-gray-500">{e.role} · {e.company}</div><div className="text-xs text-gray-400 mt-0.5">{e.type}{e.days===0?" — Today! 🎉":` — in ${e.days}d`}</div></div>
+              <button onClick={()=>openWish(e,e.type)} className="bg-pink-500 text-white text-xs px-3 py-2 rounded-xl">✍️ Wish</button>
+            </div>
+          ))}</div>
+        </div>
+      ))}
+      {wishModal&&(
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white rounded-t-2xl p-5 w-full">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
+            <h2 className="font-bold text-lg mb-1">{wishModal.type} Wish</h2>
+            <p className="text-sm text-gray-500 mb-3">For <strong>{wishModal.contact.name}</strong></p>
+            <textarea className="w-full border rounded-xl p-3 text-sm h-32 resize-none bg-gray-50" value={wishText} onChange={e=>setWishText(e.target.value)}/>
+            <div className="flex gap-2 mt-4">
+              <button onClick={copyAndOpen} className={`flex-1 py-3 rounded-xl text-sm font-semibold ${copied?"bg-green-500 text-white":"bg-pink-500 text-white"}`}>{copied?"✅ Copied! Opening LinkedIn...":"📋 Copy & Find on LinkedIn"}</button>
+              <button onClick={()=>setWishModal(null)} className="border px-4 py-3 rounded-xl text-sm text-gray-600">✕</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── App Root ──────────────────────────────────────────────────
+function App(){
+  const [tab,setTab]=useState(()=>{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get("action")==="autoblog")return "Auto-Blog";
+    return p.get("tab")||"Dashboard";
+  });
+  const [contacts,setContacts]=useState(()=>ls("contacts")||sampleContacts);
+  const [posts,setPosts]=useState(()=>ls("posts")||samplePosts);
+  const [showBixby,setShowBixby]=useState(false);
+
+  useEffect(()=>{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission();},[]);
+
+  const icons={Dashboard:"🏠","Auto-Blog":"🤖",Contacts:"👥",Schedule:"📅",Celebrations:"🎉"};
+  const todayCel=getUpcomingCelebrations(contacts).filter(e=>e.days===0).length;
+
+  return(
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {showBixby&&<BixbyGuide onClose={()=>setShowBixby(false)}/>}
+      <div className="bg-white border-b sticky top-0 z-40 safe-top">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-xs">Li</div>
+            <div><div className="font-bold text-gray-800 text-sm">LinkedIn Pro Manager</div><div className="text-xs text-gray-400">Checkmarx · ChatGPT · Auto Blog</div></div>
+          </div>
+          <div className="flex gap-1">
+            {TABS.map(t=>(
+              <button key={t} onClick={()=>setTab(t)} className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-blue-600 text-white":"text-gray-500"}`}>
+                {icons[t]}
+                {t==="Celebrations"&&todayCel>0&&<span className="absolute -top-1 -right-0.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{todayCel}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 pt-4 safe-bottom">
+        {tab==="Dashboard"&&<Dashboard contacts={contacts} posts={posts} setTab={setTab} showBixby={()=>setShowBixby(true)}/>}
+        {tab==="Auto-Blog"&&<AutoBlog posts={posts} setPosts={setPosts}/>}
+        {tab==="Contacts"&&<Contacts contacts={contacts} setContacts={setContacts}/>}
+        {tab==="Schedule"&&<Schedule posts={posts} setPosts={setPosts}/>}
+        {tab==="Celebrations"&&<Celebrations contacts={contacts}/>}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<script>
+  if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#2563eb"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="Li Manager"/>
+  <link rel="manifest" href="manifest.json"/>
+  <title>LinkedIn Pro Manager</title>
+  <!-- All manifest data is also inline so it works even without manifest.json -->
+  <script>
+    // Inline manifest registration for GitHub Pages reliability
+    if('serviceWorker' in navigator){
+      const swCode=`
+        const CACHE="li-v2";
+        const ASSETS=["/li-manager/","/li-manager/index.html"];
+        self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS).catch(()=>{})));self.skipWaiting();});
+        self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
+        self.addEventListener("fetch",e=>{if(e.request.url.includes("anthropic")||e.request.url.includes("rss")||e.request.url.includes("openai"))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});
+      `;
+      const blob=new Blob([swCode],{type:"application/javascript"});
+      const swUrl=URL.createObjectURL(blob);
+      window.addEventListener("load",()=>navigator.serviceWorker.register(swUrl).catch(()=>{}));
+    }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9fafb;overscroll-behavior-y:none}
+    textarea,input,select{font-size:16px!important}
+    ::-webkit-scrollbar{display:none}
+    .safe-top{padding-top:env(safe-area-inset-top)}
+    .safe-bottom{padding-bottom:env(safe-area-inset-bottom)}
+    @keyframes pulse2{0%,100%{opacity:1}50%{opacity:.5}}
+    .pulse{animation:pulse2 2s infinite}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef}=React;
+
+const TABS=["Dashboard","Auto-Blog","Contacts","Schedule","Celebrations"];
+const TOPICS_WEEK1=["AI & Application Security","AppSec Best Practices","AI in Cybersecurity","Zero Trust & AI","Threat Detection with AI"];
+const TOPICS_WEEK2=["Sales Engineering 101","Demo Techniques","SE Career Growth","Technical Sales Strategy","Customer Discovery"];
+const ALL_TOPICS=[...TOPICS_WEEK1,...TOPICS_WEEK2];
+const STRENGTHS=["Strong","Warm","Cold"];
+const INDUSTRIES=["Tech","Cybersecurity","Sales","Fintech","Healthcare","SaaS","Other"];
+const STATUSES=["Draft","Scheduled","Published"];
+
+// RSS proxy services (tries multiple for CORS)
+const APP_URL="https://cxsmtp.github.io/LinkHelp/";
+const RSS_PROXIES=[
+  url=>`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`,
+  url=>`https://rssproxy.migor.org/api/rss?url=${encodeURIComponent(url)}&out=json`,
+];
+const CHECKMARX_RSS="https://checkmarx.com/feed/";
+
+const sampleContacts=[
+  {id:1,name:"Priya Sharma",role:"CISO",company:"CloudShield",industry:"Cybersecurity",strength:"Strong",followUp:"2026-03-18",birthday:"1988-07-15",workAnniversary:"2020-03-01",notes:"Met at Black Hat 2025",tags:["AppSec","CISO"]},
+  {id:2,name:"Marcus Lee",role:"Sales Engineer",company:"Palo Alto Networks",industry:"Cybersecurity",strength:"Warm",followUp:"2026-03-22",birthday:"1990-03-20",workAnniversary:"2022-06-10",notes:"Interested in SE best practices",tags:["Sales","SE"]},
+  {id:3,name:"Ananya Iyer",role:"AppSec Lead",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Collaboration on AI threat modeling",tags:["AppSec","AI"]},
+];
+const samplePosts=[
+  {id:1,title:"How AI is Redefining Application Security in 2026",body:"AI is no longer just a tool for attackers...",status:"Published",date:"2026-03-05",topic:"AI & Application Security"},
+  {id:2,title:"The SE's Secret Weapon: Mastering the Technical Demo",body:"Every great Sales Engineer knows that a demo isn't just a product tour...",status:"Scheduled",date:"2026-03-14",topic:"Sales Engineering 101"},
+];
+
+function ls(key,val){try{if(val!==undefined)localStorage.setItem(key,JSON.stringify(val));else{const v=localStorage.getItem(key);return v?JSON.parse(v):null;}}catch(e){return null;}}
+function getDaysUntil(mmdd){
+  const today=new Date(),t0=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+  const[m,d]=mmdd.split("-").map(Number);
+  let next=new Date(today.getFullYear(),m-1,d);
+  if(next<t0)next.setFullYear(today.getFullYear()+1);
+  return Math.round((next-t0)/86400000);
+}
+function getUpcomingCelebrations(contacts){
+  const ev=[];
+  contacts.forEach(c=>{
+    if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)ev.push({...c,type:"Birthday",emoji:"🎂",days:d});}
+    if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)ev.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
+  });
+  return ev.sort((a,b)=>a.days-b.days);
+}
+
+function Badge({text,color="blue"}){
+  const c={blue:"bg-blue-100 text-blue-700",green:"bg-green-100 text-green-700",yellow:"bg-yellow-100 text-yellow-800",red:"bg-red-100 text-red-700",purple:"bg-purple-100 text-purple-700",gray:"bg-gray-100 text-gray-600",orange:"bg-orange-100 text-orange-700",pink:"bg-pink-100 text-pink-700",indigo:"bg-indigo-100 text-indigo-700"};
+  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[color]||c.blue}`}>{text}</span>;
+}
+function statusColor(s){return s==="Published"?"green":s==="Scheduled"?"blue":"gray";}
+
+// ── Fetch Checkmarx RSS ───────────────────────────────────────
+async function fetchCheckmarxPosts(){
+  for(const makeUrl of RSS_PROXIES){
+    try{
+      const res=await fetch(makeUrl(CHECKMARX_RSS),{signal:AbortSignal.timeout(8000)});
+      const data=await res.json();
+      // rss2json format
+      if(data.items&&data.items.length>0){
+        return data.items.slice(0,5).map(i=>({
+          title:i.title,
+          link:i.link||i.url,
+          summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").slice(0,300),
+          date:i.pubDate||i.published||"",
+        }));
+      }
+    }catch(e){continue;}
+  }
+  throw new Error("Could not fetch Checkmarx blog. Check internet connection.");
+}
+
+// ── Build ChatGPT prompt ──────────────────────────────────────
+function buildPrompt(article,week){
+  const theme=week%2===0?"Sales Engineering 101":"AI & Application Security";
+  return `You are a LinkedIn thought leader who specializes in ${theme}.
+
+Based on this recent Checkmarx blog post:
+Title: "${article.title}"
+Summary: "${article.summary}"
+Link: ${article.link}
+
+Write a compelling LinkedIn blog post that:
+1. References the Checkmarx insight as inspiration
+2. Adds my personal perspective as a professional in ${theme}
+3. Is 3-4 paragraphs, under 600 words
+4. Uses relevant emojis
+5. Ends with 3-5 hashtags including #AppSec #LinkedIn
+6. Has a strong hook in the first line
+
+Write the full post ready to copy-paste to LinkedIn.`;
+}
+
+// ── Open ChatGPT app with prompt ─────────────────────────────
+function openChatGPT(prompt){
+  // Copy prompt to clipboard first
+  navigator.clipboard?.writeText(prompt).catch(()=>{});
+  // Try ChatGPT deep link (works if ChatGPT app installed)
+  const deepLink=`chatgpt://ask?q=${encodeURIComponent(prompt.slice(0,500))}`;
+  // Fallback to web
+  const webUrl=`https://chat.openai.com/`;
+  // Try app first, fall back to web after 1.5s
+  window.location.href=deepLink;
+  setTimeout(()=>window.open(webUrl,"_blank"),1500);
+}
+
+// ── Bixby Guide ───────────────────────────────────────────────
+function BixbyGuide({onClose}){
+  const appUrl=APP_URL;
+  const triggerUrl=APP_URL+"?action=autoblog";
+  const steps=[
+    {n:1,icon:"⚙️",title:"Open Bixby Routines",desc:'Go to Settings → Advanced Features → Bixby Routines'},
+    {n:2,icon:"➕",title:'Create New Routine',desc:'Tap "+" → name it "LinkedIn Auto Blog"'},
+    {n:3,icon:"🕘",title:"Set IF: Time Trigger",desc:'Tap IF → Time → 9:00 AM → Repeat: Every Tuesday & Friday'},
+    {n:4,icon:"📱",title:"Set THEN: Open App",desc:`Tap THEN → Open App → Chrome/Samsung Internet → enter this URL (tap to copy):\n${triggerUrl}`},
+    {n:5,icon:"🔔",title:"Add notification (optional)",desc:'Tap + → Send Notification → "📝 Blog post time! Checkmarx topic loading..."'},
+    {n:6,icon:"✅",title:"Save & Enable",desc:'Save the routine and toggle it ON. Every Tue & Fri at 9AM your app will auto-open, fetch the latest Checkmarx post, and launch ChatGPT with the prompt ready!'},
+  ];
+  return(
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end">
+      <div className="bg-white rounded-t-2xl w-full max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b">
+          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"/>
+          <div className="flex justify-between items-center">
+            <div><div className="font-bold text-lg">⚡ Bixby Routines Setup</div><div className="text-xs text-gray-400">Auto-trigger every Tue & Fri at 9AM</div></div>
+            <button onClick={onClose} className="text-gray-400 text-2xl">×</button>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
+            <strong>What happens automatically:</strong> Bixby opens your app at 9AM → app fetches latest Checkmarx blog → builds prompt → opens ChatGPT with it ready → you just hit Send 🚀
+          </div>
+          {steps.map(s=>(
+            <div key={s.n} className="flex gap-3 bg-gray-50 rounded-xl p-4">
+              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">{s.n}</div>
+              <div><div className="font-semibold text-sm">{s.icon} {s.title}</div><div className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{s.desc}</div></div>
+            </div>
+          ))}
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="font-semibold text-green-800 text-sm mb-2">📋 Your Trigger URL (tap to copy)</div>
+            <div className="text-xs font-mono break-all bg-white rounded-lg p-2 border border-green-200 text-green-700"
+              onClick={()=>{navigator.clipboard?.writeText(triggerUrl);alert("✅ Copied! Paste this into Bixby's Open App URL field.");}}>
+              {triggerUrl}
+            </div>
+            <div className="text-xs text-green-600 mt-1">Tap above to copy → paste into Bixby "Open App" action</div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-700 space-y-1">
+            <div className="font-semibold">💡 Make sure you have:</div>
+            <div>✅ ChatGPT app installed on your Samsung</div>
+            <div>✅ This app added to Home Screen (installed as PWA)</div>
+            <div>✅ Internet on Tuesday & Friday morning</div>
+          </div>
+          <button onClick={onClose} className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm">Got it! ✅</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AUTO BLOG TAB ─────────────────────────────────────────────
+function AutoBlog({posts,setPosts}){
+  const [status,setStatus]=useState("idle"); // idle | fetching | ready | error
+  const [articles,setArticles]=useState([]);
+  const [selected,setSelected]=useState(null);
+  const [prompt,setPrompt]=useState("");
+  const [copied,setCopied]=useState(false);
+  const [showPrompt,setShowPrompt]=useState(false);
+  const week=Math.ceil(new Date().getDate()/7);
+  const theme=week%2===0?"Sales Engineering 101":"AI & Application Security";
+
+  // Auto-trigger if opened via Bixby URL param
+  useEffect(()=>{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get("action")==="autoblog") fetchArticles();
+  },[]);
+
+  async function fetchArticles(){
+    setStatus("fetching");setArticles([]);setSelected(null);setPrompt("");
+    try{
+      const items=await fetchCheckmarxPosts();
+      setArticles(items);
+      setSelected(items[0]);
+      setPrompt(buildPrompt(items[0],week));
+      setStatus("ready");
+    }catch(e){
+      setStatus("error");
+    }
+  }
+
+  function selectArticle(a){
+    setSelected(a);
+    setPrompt(buildPrompt(a,week));
+    setCopied(false);
+  }
+
+  function handleOpenChatGPT(){
+    navigator.clipboard?.writeText(prompt).then(()=>{
+      setCopied(true);
+      setTimeout(()=>{
+        // Try ChatGPT deep link first
+        const deepLink=`chatgpt://`;
+        window.location.href=deepLink;
+        setTimeout(()=>window.open("https://chat.openai.com/","_blank"),1500);
+      },300);
+    }).catch(()=>{
+      window.open("https://chat.openai.com/","_blank");
+    });
+  }
+
+  function saveAsDraft(){
+    if(!selected)return;
+    const post={id:Date.now(),title:`[Draft] ${selected.title}`,body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],topic:theme};
+    const updated=[...posts,post];
+    setPosts(updated);ls("posts",updated);
+    alert("✅ Saved as draft in Schedule tab!");
+  }
+
+  return(
+    <div className="space-y-4 pb-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-green-600 to-teal-700 rounded-xl p-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-2xl">🤖</span>
+          <div className="font-bold text-lg">Auto Blog Generator</div>
+        </div>
+        <div className="text-xs text-green-100">Fetches latest Checkmarx post → builds prompt → opens ChatGPT</div>
+        <div className="mt-2 flex items-center gap-2">
+          <Badge text={`This week: ${theme.includes("AI")?"🔐 AppSec":"🤝 SE"}`} color="green"/>
+          {status==="ready"&&<Badge text="✅ Ready" color="green"/>}
+          {status==="fetching"&&<Badge text="⏳ Fetching..." color="yellow"/>}
+          {status==="error"&&<Badge text="❌ Error" color="red"/>}
+        </div>
+      </div>
+
+      {/* How it works */}
+      <div className="bg-white border rounded-xl p-4">
+        <div className="font-semibold text-sm text-gray-700 mb-3">⚡ Automated Flow</div>
+        <div className="flex items-center gap-1 text-xs text-gray-500 flex-wrap">
+          {["Bixby 9AM","→","Fetch Checkmarx","→","Build Prompt","→","Open ChatGPT","→","You hit Send ✅"].map((s,i)=>(
+            <span key={i} className={s==="→"?"text-gray-300":s.includes("✅")?"text-green-600 font-semibold":"bg-gray-100 px-2 py-1 rounded-full font-medium"}>{s}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Fetch button */}
+      {status==="idle"&&(
+        <button onClick={fetchArticles} className="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-base active:bg-green-700 shadow-md">
+          🔄 Fetch Latest Checkmarx Post
+        </button>
+      )}
+
+      {/* Fetching state */}
+      {status==="fetching"&&(
+        <div className="bg-white border rounded-xl p-8 text-center">
+          <div className="text-3xl pulse mb-3">🌐</div>
+          <div className="font-semibold text-gray-700">Fetching from Checkmarx blog...</div>
+          <div className="text-xs text-gray-400 mt-1">Reading latest AppSec articles</div>
+        </div>
+      )}
+
+      {/* Error state */}
+      {status==="error"&&(
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
+          <div className="text-3xl mb-2">❌</div>
+          <div className="font-semibold text-red-700">Could not fetch Checkmarx blog</div>
+          <div className="text-xs text-red-400 mt-1 mb-4">Make sure you have internet access</div>
+          <button onClick={fetchArticles} className="bg-red-500 text-white px-6 py-2 rounded-xl text-sm font-medium">Try Again</button>
+        </div>
+      )}
+
+      {/* Articles list */}
+      {status==="ready"&&articles.length>0&&(
+        <>
+          <div className="font-semibold text-sm text-gray-700">📰 Latest Checkmarx Posts — pick one:</div>
+          <div className="space-y-2">
+            {articles.map((a,i)=>(
+              <button key={i} onClick={()=>selectArticle(a)}
+                className={`w-full text-left border rounded-xl p-3 transition ${selected?.title===a.title?"border-green-500 bg-green-50":"bg-white border-gray-200 active:bg-gray-50"}`}>
+                <div className="flex items-start gap-2">
+                  <span className="text-lg shrink-0">{selected?.title===a.title?"✅":"📄"}</span>
+                  <div>
+                    <div className="font-medium text-sm text-gray-800">{a.title}</div>
+                    {a.date&&<div className="text-xs text-gray-400 mt-0.5">{new Date(a.date).toLocaleDateString()}</div>}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Prompt preview */}
+          {selected&&(
+            <div className="bg-white border rounded-xl overflow-hidden">
+              <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3 text-sm font-semibold text-gray-700">
+                <span>📝 ChatGPT Prompt Preview</span>
+                <span className="text-gray-400">{showPrompt?"▲":"▼"}</span>
+              </button>
+              {showPrompt&&(
+                <div className="px-4 pb-4">
+                  <textarea className="w-full border rounded-xl p-3 text-xs h-40 resize-none bg-gray-50 text-gray-600" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+                  <div className="text-xs text-gray-400 mt-1">You can edit this prompt before sending</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="space-y-3">
+            <button onClick={handleOpenChatGPT}
+              className={`w-full py-4 rounded-xl font-bold text-base shadow-md transition ${copied?"bg-green-500 text-white":"bg-[#10a37f] text-white active:opacity-90"}`}>
+              {copied?"✅ Prompt Copied! ChatGPT Opening...":"🤖 Copy Prompt & Open ChatGPT"}
+            </button>
+            <div className="text-xs text-center text-gray-400">Prompt is copied to clipboard → paste it in ChatGPT → hit Send</div>
+            <div className="flex gap-2">
+              <button onClick={saveAsDraft} className="flex-1 border border-blue-300 text-blue-600 py-2.5 rounded-xl text-sm font-medium active:bg-blue-50">💾 Save as Draft</button>
+              <button onClick={()=>{setStatus("idle");setArticles([]);}} className="flex-1 border text-gray-500 py-2.5 rounded-xl text-sm font-medium active:bg-gray-50">🔄 Refresh</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bixby reminder */}
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+        <div className="font-semibold text-violet-800 text-sm">⚡ Automate with Bixby</div>
+        <div className="text-xs text-violet-600 mt-1">Set up Bixby to trigger this tab every Tue & Fri at 9AM automatically — no manual tapping needed.</div>
+        <div className="text-xs text-violet-500 mt-2 font-mono break-all">{window.location.href.split("?")[0]}?action=autoblog</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+function Dashboard({contacts,posts,setTab,showBixby}){
+  const cel=getUpcomingCelebrations(contacts);
+  const today=cel.filter(e=>e.days===0);
+  const week7=cel.filter(e=>e.days>0&&e.days<=7);
+  const strong=contacts.filter(c=>c.strength==="Strong").length;
+  const wk=Math.ceil(new Date().getDate()/7);
+  const nextTheme=wk%2===0?"Sales Engineering 101":"AI & Application Security";
+  const notifGranted="Notification" in window&&Notification.permission==="granted";
+
+  return(
+    <div className="space-y-4 pb-6">
+      {today.length>0&&<div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl p-4 text-white"><div className="font-bold">🎉 Today's Celebrations!</div>{today.map((e,i)=><div key={i} className="text-sm mt-1">{e.emoji} {e.type} — <strong>{e.name}</strong></div>)}</div>}
+
+      {/* Auto Blog CTA */}
+      <button onClick={()=>setTab("Auto-Blog")} className="w-full bg-gradient-to-r from-green-600 to-teal-600 rounded-xl p-4 text-white text-left active:opacity-90">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-bold text-lg">🤖 Auto Blog</div>
+            <div className="text-xs text-green-100 mt-0.5">Fetch Checkmarx → Prompt → ChatGPT</div>
+          </div>
+          <div className="text-3xl">→</div>
+        </div>
+      </button>
+
+      {/* Bixby Banner */}
+      <div className="bg-gradient-to-r from-violet-600 to-purple-700 rounded-xl p-4 text-white">
+        <div className="flex justify-between items-start">
+          <div><div className="font-bold">⚡ Bixby Schedule</div><div className="text-xs text-purple-200 mt-0.5">Auto-trigger every Tue & Fri 9AM</div></div>
+          {notifGranted&&<Badge text="Active ✅" color="green"/>}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={showBixby} className="bg-white text-purple-700 text-xs font-bold px-3 py-2 rounded-lg">📖 Setup Guide</button>
+          {!notifGranted&&<button onClick={()=>Notification.requestPermission()} className="border border-purple-300 text-white text-xs px-3 py-2 rounded-lg">🔔 Enable Alerts</button>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[{label:"Total Contacts",value:contacts.length,icon:"👥",color:"bg-blue-50 border-blue-200",tab:"Contacts"},{label:"Strong Connections",value:strong,icon:"💼",color:"bg-green-50 border-green-200",tab:"Contacts"},{label:"Posts Published",value:posts.filter(p=>p.status==="Published").length,icon:"✅",color:"bg-purple-50 border-purple-200",tab:"Schedule"},{label:"Upcoming Events",value:cel.length,icon:"🎂",color:"bg-pink-50 border-pink-200",tab:"Celebrations"}].map(card=>(
+          <button key={card.label} onClick={()=>setTab(card.tab)} className={`${card.color} border rounded-xl p-3 text-left active:scale-95 transition-transform`}>
+            <div className="text-xl">{card.icon}</div>
+            <div className="text-2xl font-bold text-gray-800">{card.value}</div>
+            <div className="text-xs text-gray-500">{card.label}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-gradient-to-r from-slate-800 to-blue-900 rounded-xl p-4 text-white">
+        <div className="text-xs text-blue-300 font-medium mb-1">THIS WEEK'S THEME</div>
+        <div className="font-bold">{nextTheme.includes("AI")?"🔐":"🤝"} {nextTheme}</div>
+        <div className="text-xs text-blue-200 mt-1">Tue & Fri · 2 posts/week</div>
+      </div>
+
+      {week7.length>0&&<div className="bg-white border rounded-xl p-4"><h3 className="font-semibold text-gray-700 mb-3">🔔 This Week</h3>{week7.map((e,i)=><div key={i} className="flex items-center justify-between py-2 border-b last:border-0"><div><div className="font-medium text-sm">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div><div className="flex gap-1 items-center"><span>{e.emoji}</span><Badge text={`${e.days}d`} color="pink"/></div></div>)}</div>}
+
+      <div className="bg-white border rounded-xl p-4">
+        <h3 className="font-semibold text-gray-700 mb-3">💼 Connection Strength</h3>
+        {STRENGTHS.map(s=>{const count=contacts.filter(c=>c.strength===s).length;const pct=contacts.length?Math.round(count/contacts.length*100):0;return(<div key={s} className="mb-2"><div className="flex justify-between text-xs text-gray-600 mb-1"><span>{s}</span><span>{count}</span></div><div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${s==="Strong"?"bg-green-500":s==="Warm"?"bg-yellow-400":"bg-gray-300"}`} style={{width:`${pct}%`}}/></div></div>);})}
+      </div>
+    </div>
+  );
+}
+
+// ── Contacts ──────────────────────────────────────────────────
+function Contacts({contacts,setContacts}){
+  const [search,setSearch]=useState("");
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({});
+  const [activeStr,setActiveStr]=useState("All");
+  const filtered=contacts.filter(c=>(activeStr==="All"||c.strength===activeStr)&&(c.name.toLowerCase().includes(search.toLowerCase())||c.company.toLowerCase().includes(search.toLowerCase())));
+  const grouped={Strong:filtered.filter(c=>c.strength==="Strong"),Warm:filtered.filter(c=>c.strength==="Warm"),Cold:filtered.filter(c=>c.strength==="Cold")};
+  function openAdd(){setForm({name:"",role:"",company:"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"",tags:""});setModal("add");}
+  function openEdit(c){setForm({...c,tags:c.tags.join(", ")});setModal("edit");}
+  function saveContact(){
+    const contact={...form,tags:form.tags?form.tags.split(",").map(t=>t.trim()).filter(Boolean):[]};
+    let u=modal==="add"?[...contacts,{...contact,id:Date.now()}]:contacts.map(c=>c.id===form.id?contact:c);
+    setContacts(u);ls("contacts",u);setModal(null);
+  }
+  function del(id){const u=contacts.filter(c=>c.id!==id);setContacts(u);ls("contacts",u);}
+  return(
+    <div className="space-y-4 pb-6">
+      <div className="flex gap-2"><input className="border rounded-xl px-3 py-2.5 text-sm flex-1 bg-white" placeholder="🔍 Search..." value={search} onChange={e=>setSearch(e.target.value)}/><button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium">+ Add</button></div>
+      <div className="flex gap-2 overflow-x-auto pb-1">{["All",...STRENGTHS].map(s=><button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${activeStr===s?"bg-blue-600 text-white":"bg-white border text-gray-600"}`}>{s}{s!=="All"?` (${contacts.filter(c=>c.strength===s).length})`:""}</button>)}</div>
+      {(activeStr==="All"?STRENGTHS:[activeStr]).map(str=>grouped[str]?.length>0&&(
+        <div key={str}>
+          <div className="text-sm font-bold text-gray-600 mb-2">{str==="Strong"?"💚":str==="Warm"?"🟡":"⚪"} {str}</div>
+          <div className="space-y-3">{grouped[str].map(c=>{
+            const cel=[];
+            if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)cel.push(`🎂 ${d}d`);}
+            if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)cel.push(`🏆 ${d}d`);}
+            return(<div key={c.id} className={`bg-white border rounded-xl p-4 ${cel.length?"border-pink-200":""}`}>
+              <div className="flex justify-between items-start"><div><div className="font-semibold">{c.name}</div><div className="text-xs text-gray-400">{c.role} · {c.company}</div></div><Badge text={c.industry} color="indigo"/></div>
+              {cel.map((x,i)=><span key={i} className="text-xs text-pink-500 font-medium mr-2">{x}</span>)}
+              {c.notes&&<p className="text-xs text-gray-400 mt-1 italic">"{c.notes}"</p>}
+              <div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>
+              <div className="flex justify-between items-center mt-2">{c.followUp&&<span className="text-xs text-orange-500">📅 {c.followUp}</span>}<div className="ml-auto flex gap-4"><button onClick={()=>openEdit(c)} className="text-xs text-blue-600">Edit</button><button onClick={()=>del(c.id)} className="text-xs text-red-400">Delete</button></div></div>
+            </div>);
+          })}</div>
+        </div>
+      ))}
+      {modal&&(<div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
+        <div className="bg-white rounded-t-2xl p-5 w-full max-h-[90vh] overflow-y-auto">
+          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
+          <h2 className="font-bold text-lg mb-4">{modal==="add"?"➕ Add":"✏️ Edit"} Contact</h2>
+          <div className="space-y-3">
+            {[["name","Name"],["role","Role"],["company","Company"],["notes","Notes"]].map(([k,l])=>(
+              <div key={k}><label className="text-xs text-gray-500 font-medium">{l}</label><input className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>
+            ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-gray-500 font-medium">Industry</label><select className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.industry||"Tech"} onChange={e=>setForm(p=>({...p,industry:e.target.value}))}>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
+              <div><label className="text-xs text-gray-500 font-medium">Strength</label><select className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.strength||"Warm"} onChange={e=>setForm(p=>({...p,strength:e.target.value}))}>{STRENGTHS.map(s=><option key={s}>{s}</option>)}</select></div>
+            </div>
+            <div><label className="text-xs text-gray-500 font-medium">Follow-up</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.followUp||""} onChange={e=>setForm(p=>({...p,followUp:e.target.value}))}/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-gray-500 font-medium">🎂 Birthday</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.birthday||""} onChange={e=>setForm(p=>({...p,birthday:e.target.value}))}/></div>
+              <div><label className="text-xs text-gray-500 font-medium">🏆 Anniversary</label><input type="date" className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.workAnniversary||""} onChange={e=>setForm(p=>({...p,workAnniversary:e.target.value}))}/></div>
+            </div>
+            <div><label className="text-xs text-gray-500 font-medium">Tags</label><input className="w-full border rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.tags||""} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="AppSec, AI, Sales"/></div>
+          </div>
+          <div className="flex gap-2 mt-5"><button onClick={saveContact} className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-semibold">Save</button><button onClick={()=>setModal(null)} className="flex-1 border py-3 rounded-xl text-sm text-gray-600">Cancel</button></div>
+        </div>
+      </div>)}
+    </div>
+  );
+}
+
+// ── Schedule ──────────────────────────────────────────────────
+function Schedule({posts,setPosts}){
+  const [copied,setCopied]=useState(null);
+  const sorted=[...posts].sort((a,b)=>a.date>b.date?1:-1);
+  const weeks={};
+  sorted.forEach(p=>{const d=new Date(p.date);const mon=new Date(d);mon.setDate(d.getDate()-d.getDay()+1);const key=mon.toISOString().split("T")[0];if(!weeks[key])weeks[key]=[];weeks[key].push(p);});
+  function handleCopyOpen(p){
+    const text=`${p.title}\n\n${p.body}\n\n#${p.topic.replace(/[^a-zA-Z]/g,"")} #LinkedIn #AppSec`;
+    navigator.clipboard?.writeText(text).then(()=>{setCopied(p.id);setTimeout(()=>setCopied(null),3000);setTimeout(()=>window.open("https://www.linkedin.com/feed/","_blank"),500);});
+  }
+  function markPublished(p){const u=posts.map(x=>x.id===p.id?{...x,status:"Published"}:x);setPosts(u);ls("posts",u);}
+  return(
+    <div className="space-y-4 pb-6">
+      <div className="bg-gradient-to-r from-slate-800 to-indigo-900 rounded-xl p-4 text-white">
+        <div className="font-bold text-lg">📆 Schedule</div>
+        <div className="text-xs text-blue-200 mt-1">🔐 AppSec ↔ 🤝 SE · Tue & Fri · 2/week</div>
+        <div className="flex gap-4 mt-2 text-sm"><span>✅ {posts.filter(p=>p.status==="Published").length} published</span><span>🕐 {posts.filter(p=>p.status==="Scheduled").length} scheduled</span></div>
+      </div>
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800"><strong>💡 To post:</strong> Tap "Copy & Open LinkedIn" → paste in LinkedIn app → Post!</div>
+      {Object.keys(weeks).sort().map(w=>(
+        <div key={w} className="bg-white border rounded-xl overflow-hidden">
+          <div className="bg-gray-50 px-4 py-2.5 border-b flex justify-between items-center"><span className="font-semibold text-sm">Week of {w}</span><span className={`text-xs font-medium px-2 py-0.5 rounded-full ${weeks[w].length>=2?"bg-green-100 text-green-700":"bg-yellow-100 text-yellow-700"}`}>{weeks[w].length}/2</span></div>
+          {weeks[w].map(p=>(
+            <div key={p.id} className="px-4 py-3 border-b last:border-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1"><div className="font-medium text-sm">{p.title}</div><div className="text-xs text-gray-400 mt-0.5">{p.topic} · {p.date}</div></div>
+                <div className="flex flex-col gap-1 items-end shrink-0"><Badge text={p.status} color={statusColor(p.status)}/><Badge text={TOPICS_WEEK1.includes(p.topic)?"🔐":"🤝"} color={TOPICS_WEEK1.includes(p.topic)?"indigo":"orange"}/></div>
+              </div>
+              {(p.status==="Scheduled"||p.status==="Draft")&&(
+                <div className="flex gap-2 mt-3">
+                  <button onClick={()=>handleCopyOpen(p)} className={`flex-1 text-xs py-2 rounded-xl font-semibold ${copied===p.id?"bg-green-500 text-white":"bg-blue-600 text-white"}`}>{copied===p.id?"✅ Copied!":"📋 Copy & Open LinkedIn"}</button>
+                  {p.status==="Scheduled"&&<button onClick={()=>markPublished(p)} className="text-xs border border-green-300 text-green-600 px-3 py-2 rounded-xl">✅ Done</button>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      {Object.keys(weeks).length===0&&<p className="text-gray-400 text-sm text-center py-10">No posts yet. Use Auto-Blog tab to generate one!</p>}
+    </div>
+  );
+}
+
+// ── Celebrations ──────────────────────────────────────────────
+function Celebrations({contacts}){
+  const [wishModal,setWishModal]=useState(null);
+  const [wishText,setWishText]=useState("");
+  const [copied,setCopied]=useState(false);
+  const all=[];
+  contacts.forEach(c=>{
+    if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));all.push({...c,type:"Birthday",emoji:"🎂",days:d});}
+    if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));all.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
+  });
+  all.sort((a,b)=>a.days-b.days);
+  const sections=[{title:"🎉 TODAY",events:all.filter(e=>e.days===0),hi:true},{title:"📅 This Week",events:all.filter(e=>e.days>0&&e.days<=7)},{title:"🗓️ This Month",events:all.filter(e=>e.days>7&&e.days<=30)}];
+  const templates={Birthday:(c)=>`🎂 Happy Birthday, ${c.name}! Wishing you a wonderful day filled with joy. Your work in ${c.role} at ${c.company} is truly inspiring. Here's to an amazing year ahead! 🚀`,
+    "Work Anniversary":(c)=>`🏆 Congratulations on your work anniversary, ${c.name}! Your contributions as ${c.role} at ${c.company} are truly valued. Wishing you continued success! 💼`};
+  function openWish(contact,type){setWishModal({contact,type});setWishText(templates[type]?.(contact)||"");setCopied(false);}
+  function copyAndOpen(){
+    navigator.clipboard?.writeText(wishText).then(()=>{setCopied(true);setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.contact.name)}`,"_blank"),400);});
+  }
+  return(
+    <div className="space-y-5 pb-6">
+      <div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-xl p-4 text-white">
+        <div className="font-bold text-lg">🎉 Celebrations</div>
+        <div className="flex gap-4 mt-2 text-sm"><span>Today: <strong>{all.filter(e=>e.days===0).length}</strong></span><span>Week: <strong>{all.filter(e=>e.days>0&&e.days<=7).length}</strong></span><span>Month: <strong>{all.filter(e=>e.days<=30).length}</strong></span></div>
+      </div>
+      {all.length===0&&<p className="text-gray-400 text-sm text-center py-10">Add birthdays & anniversaries in Contacts to see them here!</p>}
+      {sections.map(sec=>sec.events.length>0&&(
+        <div key={sec.title}>
+          <div className={`font-semibold text-sm mb-2 ${sec.hi?"text-pink-600":"text-gray-600"}`}>{sec.title}</div>
+          <div className="space-y-2">{sec.events.map((e,i)=>(
+            <div key={i} className={`bg-white border rounded-xl p-4 flex items-center justify-between ${sec.hi?"border-pink-200 bg-pink-50":""}`}>
+              <div><div className="font-semibold">{e.emoji} {e.name}</div><div className="text-xs text-gray-500">{e.role} · {e.company}</div><div className="text-xs text-gray-400 mt-0.5">{e.type}{e.days===0?" — Today! 🎉":` — in ${e.days}d`}</div></div>
+              <button onClick={()=>openWish(e,e.type)} className="bg-pink-500 text-white text-xs px-3 py-2 rounded-xl">✍️ Wish</button>
+            </div>
+          ))}</div>
+        </div>
+      ))}
+      {wishModal&&(
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
+          <div className="bg-white rounded-t-2xl p-5 w-full">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
+            <h2 className="font-bold text-lg mb-1">{wishModal.type} Wish</h2>
+            <p className="text-sm text-gray-500 mb-3">For <strong>{wishModal.contact.name}</strong></p>
+            <textarea className="w-full border rounded-xl p-3 text-sm h-32 resize-none bg-gray-50" value={wishText} onChange={e=>setWishText(e.target.value)}/>
+            <div className="flex gap-2 mt-4">
+              <button onClick={copyAndOpen} className={`flex-1 py-3 rounded-xl text-sm font-semibold ${copied?"bg-green-500 text-white":"bg-pink-500 text-white"}`}>{copied?"✅ Copied! Opening LinkedIn...":"📋 Copy & Find on LinkedIn"}</button>
+              <button onClick={()=>setWishModal(null)} className="border px-4 py-3 rounded-xl text-sm text-gray-600">✕</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── App Root ──────────────────────────────────────────────────
+function App(){
+  const [tab,setTab]=useState(()=>{
+    const p=new URLSearchParams(window.location.search);
+    if(p.get("action")==="autoblog")return "Auto-Blog";
+    return p.get("tab")||"Dashboard";
+  });
+  const [contacts,setContacts]=useState(()=>ls("contacts")||sampleContacts);
+  const [posts,setPosts]=useState(()=>ls("posts")||samplePosts);
+  const [showBixby,setShowBixby]=useState(false);
+
+  useEffect(()=>{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission();},[]);
+
+  const icons={Dashboard:"🏠","Auto-Blog":"🤖",Contacts:"👥",Schedule:"📅",Celebrations:"🎉"};
+  const todayCel=getUpcomingCelebrations(contacts).filter(e=>e.days===0).length;
+
+  return(
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {showBixby&&<BixbyGuide onClose={()=>setShowBixby(false)}/>}
+      <div className="bg-white border-b sticky top-0 z-40 safe-top">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-xs">Li</div>
+            <div><div className="font-bold text-gray-800 text-sm">LinkedIn Pro Manager</div><div className="text-xs text-gray-400">Checkmarx · ChatGPT · Auto Blog</div></div>
+          </div>
+          <div className="flex gap-1">
+            {TABS.map(t=>(
+              <button key={t} onClick={()=>setTab(t)} className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-blue-600 text-white":"text-gray-500"}`}>
+                {icons[t]}
+                {t==="Celebrations"&&todayCel>0&&<span className="absolute -top-1 -right-0.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{todayCel}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 pt-4 safe-bottom">
+        {tab==="Dashboard"&&<Dashboard contacts={contacts} posts={posts} setTab={setTab} showBixby={()=>setShowBixby(true)}/>}
+        {tab==="Auto-Blog"&&<AutoBlog posts={posts} setPosts={setPosts}/>}
+        {tab==="Contacts"&&<Contacts contacts={contacts} setContacts={setContacts}/>}
+        {tab==="Schedule"&&<Schedule posts={posts} setPosts={setPosts}/>}
+        {tab==="Celebrations"&&<Celebrations contacts={contacts}/>}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+<script>
+  if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+</body>
+</html>
