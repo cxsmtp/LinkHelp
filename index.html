@@ -7,7 +7,6 @@
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-title" content="Li Manager"/>
-  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
   <link rel="manifest" href="manifest.json"/>
   <title>LinkedIn Pro Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -57,57 +56,50 @@ function makeProxyUrls(feedUrl){
   ];
 }
 
+// Multiple proxy fallbacks per source
 async function fetchOneFeed(src){
-  // Try rss2json (most reliable CORS-friendly proxy)
-  try{
-    const url=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=3`;
-    const r=await fetch(url,{signal:AbortSignal.timeout(9000),mode:"cors"});
-    if(r.ok){
-      const d=await r.json();
-      if(d.status==="ok"&&d.items?.length){
-        return d.items.slice(0,3).map(i=>({
-          title:(i.title||"").trim(),
-          link:i.link||i.url||"",
-          summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
-          date:i.pubDate||i.published||"",
-          source:src.name,tag:src.tag,
-        })).filter(i=>i.title);
-      }
-    }
-  }catch(e){console.warn(`rss2json failed for ${src.name}:`,e);}
+  const proxies=[
+    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=3`,
+    `https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,
+  ];
 
-  // Fallback: allorigins proxy
+  // Try rss2json
   try{
-    const url=`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`;
-    const r=await fetch(url,{signal:AbortSignal.timeout(9000),mode:"cors"});
-    if(r.ok){
-      const d=await r.json();
-      const xml=d.contents||"";
-      const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0,3);
-      if(items.length){
-        return items.map(m=>{
-          const get=tag=>{const x=m[1].match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));return x?((x[1]||x[2]||"").trim()):""};
-          return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
-        }).filter(i=>i.title);
-      }
+    const r=await fetch(proxies[0],{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    if(d.status==="ok"&&d.items&&d.items.length){
+      return d.items.slice(0,3).map(i=>({
+        title:(i.title||"").trim(),
+        link:i.link||i.url||"",
+        summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
+        date:i.pubDate||i.published||"",
+        source:src.name,
+        tag:src.tag,
+      })).filter(i=>i.title);
     }
-  }catch(e){console.warn(`allorigins failed for ${src.name}:`,e);}
+  }catch(e){}
 
-  // Fallback 2: corsproxy.io
+  // Try allorigins
   try{
-    const url=`https://corsproxy.io/?${encodeURIComponent(src.url)}`;
-    const r=await fetch(url,{signal:AbortSignal.timeout(9000),mode:"cors"});
-    if(r.ok){
-      const xml=await r.text();
-      const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0,3);
-      if(items.length){
-        return items.map(m=>{
-          const get=tag=>{const x=m[1].match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));return x?((x[1]||x[2]||"").trim()):""};
-          return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
-        }).filter(i=>i.title);
-      }
-    }
-  }catch(e){console.warn(`corsproxy failed for ${src.name}:`,e);}
+    const r=await fetch(proxies[1],{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    const xml=d.contents||"";
+    const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||[];
+    return matches.slice(0,3).map(raw=>{
+      const get=tag=>{
+        const m=raw.match(new RegExp("<"+tag+"[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></"+tag+">|<"+tag+"[^>]*>([\\s\\S]*?)</"+tag+">"));
+        return m?(m[1]||m[2]||"").trim():"";
+      };
+      return{
+        title:get("title"),
+        link:get("link")||get("guid"),
+        summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),
+        date:get("pubDate"),
+        source:src.name,
+        tag:src.tag,
+      };
+    }).filter(i=>i.title);
+  }catch(e){}
 
   return [];
 }
