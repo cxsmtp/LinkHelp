@@ -22,104 +22,46 @@
     .safe-bottom{padding-bottom:env(safe-area-inset-bottom)}
     @keyframes spin{to{transform:rotate(360deg)}}
     .spin{animation:spin 1s linear infinite;display:inline-block}
-    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .fade{animation:fade 0.3s ease forwards}
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect,useRef}=React;
+const {useState,useEffect,useRef} = React;
 
-const APP_URL="https://cxsmtp.github.io/LinkHelp/";
-const TABS=["Home","Topics","Contacts","Schedule","Events"];
-const STRENGTHS=["Strong","Warm","Cold"];
-const INDUSTRIES=["Tech","Cybersecurity","Sales","Fintech","Healthcare","SaaS","Other"];
-const STATUSES=["Draft","Scheduled","Published"];
+const APP_URL = "https://cxsmtp.github.io/LinkHelp/";
+const TABS = ["Home","Topics","Contacts","Schedule","Events"];
+const STRENGTHS = ["Strong","Warm","Cold"];
+const INDUSTRIES = ["Tech","Cybersecurity","Sales","Fintech","Healthcare","SaaS","Other"];
+const STATUSES = ["Draft","Scheduled","Published"];
 
-// Multiple RSS sources for wide topic coverage
-const FEED_SOURCES=[
-  {name:"Checkmarx",url:"https://checkmarx.com/feed/",tag:"AppSec"},
-  {name:"PortSwigger",url:"https://portswigger.net/daily-swig/rss",tag:"Web Security"},
-  {name:"Dark Reading",url:"https://www.darkreading.com/rss.xml",tag:"Threat Intel"},
-  {name:"Krebs on Security",url:"https://krebsonsecurity.com/feed/",tag:"Breaches"},
-  {name:"The Hacker News",url:"https://feeds.feedburner.com/TheHackersNews",tag:"CVE/News"},
-  {name:"SANS",url:"https://isc.sans.edu/rssfeed_full.xml",tag:"SANS ISC"},
+const FEED_SOURCES = [
+  {name:"Checkmarx",    url:"https://checkmarx.com/feed/",                        tag:"AppSec"},
+  {name:"PortSwigger",  url:"https://portswigger.net/daily-swig/rss",             tag:"Web Security"},
+  {name:"Dark Reading", url:"https://www.darkreading.com/rss.xml",                tag:"Threat Intel"},
+  {name:"Krebs",        url:"https://krebsonsecurity.com/feed/",                  tag:"Breaches"},
+  {name:"Hacker News",  url:"https://feeds.feedburner.com/TheHackersNews",        tag:"CVE/News"},
+  {name:"SANS ISC",     url:"https://isc.sans.edu/rssfeed_full.xml",              tag:"SANS"},
 ];
 
-// Multiple proxy fallbacks
-function makeProxyUrls(feedUrl){
-  return [
-    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=3&api_key=`,
-    `https://cors-anywhere.herokuapp.com/${feedUrl}`,
-    `https://thingproxy.freeboard.io/fetch/${feedUrl}`,
-  ];
-}
-
-// Multiple proxy fallbacks per source
-async function fetchOneFeed(src){
-  const proxies=[
-    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=3`,
-    `https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,
-  ];
-
-  // Try rss2json
-  try{
-    const r=await fetch(proxies[0],{signal:AbortSignal.timeout(8000)});
-    const d=await r.json();
-    if(d.status==="ok"&&d.items&&d.items.length){
-      return d.items.slice(0,3).map(i=>({
-        title:(i.title||"").trim(),
-        link:i.link||i.url||"",
-        summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
-        date:i.pubDate||i.published||"",
-        source:src.name,
-        tag:src.tag,
-      })).filter(i=>i.title);
-    }
-  }catch(e){}
-
-  // Try allorigins
-  try{
-    const r=await fetch(proxies[1],{signal:AbortSignal.timeout(8000)});
-    const d=await r.json();
-    const xml=d.contents||"";
-    const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||[];
-    return matches.slice(0,3).map(raw=>{
-      const get=tag=>{
-        const m=raw.match(new RegExp("<"+tag+"[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></"+tag+">|<"+tag+"[^>]*>([\\s\\S]*?)</"+tag+">"));
-        return m?(m[1]||m[2]||"").trim():"";
-      };
-      return{
-        title:get("title"),
-        link:get("link")||get("guid"),
-        summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),
-        date:get("pubDate"),
-        source:src.name,
-        tag:src.tag,
-      };
-    }).filter(i=>i.title);
-  }catch(e){}
-
-  return [];
-}
-
-const sampleContacts=[
+const sampleContacts = [
   {id:1,name:"Priya Sharma",role:"CISO",company:"CloudShield",industry:"Cybersecurity",strength:"Strong",followUp:"2026-03-18",birthday:"1988-07-15",workAnniversary:"2020-03-01",notes:"Met at Black Hat 2025",tags:["AppSec","CISO"]},
   {id:2,name:"Marcus Lee",role:"AppSec Lead",company:"Palo Alto Networks",industry:"Cybersecurity",strength:"Warm",followUp:"2026-03-22",birthday:"1990-03-20",workAnniversary:"2022-06-10",notes:"Interested in AI threat modeling",tags:["AppSec","AI"]},
-  {id:3,name:"Ananya Iyer",role:"Head of Security Engineering",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Collaboration on zero trust architecture",tags:["AppSec","ZeroTrust"]},
+  {id:3,name:"Ananya Iyer",role:"Head of Security Engineering",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Zero trust architecture",tags:["AppSec","ZeroTrust"]},
 ];
-const samplePosts=[
-  {id:1,title:"The Hidden Cost of Insecure Code in the Age of AI",body:"Draft content...",status:"Published",date:"2026-03-05",source:"Checkmarx"},
-  {id:2,title:"Why Zero Trust Fails Without Application-Layer Thinking",body:"Draft content...",status:"Scheduled",date:"2026-03-14",source:"PortSwigger"},
+const samplePosts = [
+  {id:1,title:"The Hidden Cost of Insecure Code in the Age of AI",body:"Draft...",status:"Published",date:"2026-03-05",source:"Checkmarx"},
+  {id:2,title:"Why Zero Trust Fails Without Application-Layer Thinking",body:"Draft...",status:"Scheduled",date:"2026-03-14",source:"PortSwigger"},
 ];
 
-function ls(k,v){try{if(v!==undefined)localStorage.setItem(k,JSON.stringify(v));else{const x=localStorage.getItem(k);return x?JSON.parse(x):null;}}catch(e){return null;}}
+function store(k,v){try{if(v!==undefined)localStorage.setItem(k,JSON.stringify(v));else{const x=localStorage.getItem(k);return x?JSON.parse(x):null;}}catch(e){return null;}}
 function getDaysUntil(mmdd){
-  const t=new Date(),t0=new Date(t.getFullYear(),t.getMonth(),t.getDate());
-  const[m,d]=mmdd.split("-").map(Number);
-  let n=new Date(t.getFullYear(),m-1,d);
-  if(n<t0)n.setFullYear(t.getFullYear()+1);
+  const t0=new Date();t0.setHours(0,0,0,0);
+  const [m,d]=mmdd.split("-").map(Number);
+  let n=new Date(t0.getFullYear(),m-1,d);
+  if(n<t0)n.setFullYear(t0.getFullYear()+1);
   return Math.round((n-t0)/86400000);
 }
 function getCelebrations(contacts){
@@ -131,93 +73,109 @@ function getCelebrations(contacts){
   return ev.sort((a,b)=>a.days-b.days);
 }
 
-// Fetch all RSS feeds in parallel with dual-proxy fallback
+// RSS fetch via JSONP — bypasses CORS on mobile Chrome
+function fetchViaJsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cb="rss_"+Math.random().toString(36).slice(2);
+    const script=document.createElement("script");
+    const timer=setTimeout(()=>{cleanup();reject(new Error("timeout"));},9000);
+    function cleanup(){clearTimeout(timer);delete window[cb];if(script.parentNode)script.remove();}
+    window[cb]=data=>{cleanup();resolve(data);};
+    script.src=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=4&callback=${cb}`;
+    script.onerror=()=>{cleanup();reject(new Error("script error"));};
+    document.head.appendChild(script);
+  });
+}
+
+function parseItems(items,src){
+  return (items||[]).slice(0,3).map(i=>({
+    title:(i.title||"").trim(),
+    link:i.link||i.url||"",
+    summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
+    date:i.pubDate||i.published||"",
+    source:src.name,
+    tag:src.tag,
+  })).filter(i=>i.title);
+}
+
 async function fetchAllTopics(){
-  const results=await Promise.allSettled(FEED_SOURCES.map(src=>fetchOneFeed(src)));
+  const results = await Promise.allSettled(
+    FEED_SOURCES.map(async src=>{
+      try{
+        const d = await fetchViaJsonp(src.url);
+        if(d.status==="ok"&&d.items&&d.items.length) return parseItems(d.items,src);
+      }catch(e){}
+      // fallback: allorigins
+      try{
+        const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
+        const d=await r.json();
+        const xml=d.contents||"";
+        const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||[];
+        if(matches.length){
+          return matches.slice(0,3).map(raw=>{
+            const get=tag=>{
+              const m=raw.match(new RegExp("<"+tag+"[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></"+tag+">|<"+tag+"[^>]*>([\\s\\S]*?)</"+tag+">"));
+              return m?(m[1]||m[2]||"").trim():"";
+            };
+            return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
+          }).filter(i=>i.title);
+        }
+      }catch(e){}
+      return [];
+    })
+  );
   const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]).filter(a=>a.title);
-  if(!all.length)throw new Error("Could not fetch any topics.");
+  if(!all.length)throw new Error("No topics fetched");
   return all.sort((a,b)=>new Date(b.date)-new Date(a.date));
 }
 
-// ── Master ChatGPT Prompt ─────────────────────────────────────
-function buildMasterPrompt(selectedArticles){
+function buildPrompt(articles){
   const today=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
-  const articleBlock=selectedArticles.map((a,i)=>`
-SOURCE ${i+1} — ${a.source} [${a.tag}]
+  const block=articles.map((a,i)=>`SOURCE ${i+1} [${a.source} / ${a.tag}]
 Title: ${a.title}
 Summary: ${a.summary}
 URL: ${a.link}
-Date: ${a.date?new Date(a.date).toLocaleDateString():"Recent"}
-`).join("\n---\n");
+Date: ${a.date?new Date(a.date).toLocaleDateString("en-GB"):"Recent"}`).join("\n\n---\n\n");
 
-  return `Today is ${today}.
-
-You are helping a senior cybersecurity leader write a LinkedIn post to build thought leadership in Application Security.
+  return `Today: ${today}
 
 AUTHOR VOICE:
-- Strategic CISO perspective: connects AppSec risks directly to business impact and board-level decisions
-- Educator mindset: makes complex security concepts clear for both executives and engineers
-- Practitioner tone: measured, direct, no hype — writes from experience not theory
-- Uses "I", "we", "in my experience" — first person throughout
-- No emojis. No exclamation marks. No marketing language.
+- Strategic CISO perspective: connects AppSec risk to business and board-level decisions
+- Educator: makes complex security accessible to both executives and engineers
+- First-person, practitioner tone: measured, direct, no hype, no marketing language
+- Uses "I", "we", "in my experience"
+- No emojis. No exclamation marks. No bullet points inside the post.
 
-SOURCE MATERIAL (use as foundation — go beyond with latest news):
-${articleBlock}
+SOURCE MATERIAL:
+${block}
 
 ---
-PRODUCE THE FOLLOWING — use these exact headers:
+PRODUCE EXACTLY THE FOLLOWING — use these headers:
 
 ## LINKEDIN POST
-
-Write the post following these rules:
-- Open with one short, bold statement that challenges conventional thinking — not a question
-- Write exactly 4 paragraphs, maximum 3 sentences each, no bullet points inside the post
-- Paragraph 1: What is actually happening in AppSec right now — ground it in the sources above AND any relevant CVEs, breaches, or announcements from the past 14 days
-- Paragraph 2: Why this matters at a business and board level — translate technical risk into financial or reputational exposure
-- Paragraph 3: What most security teams are getting wrong or overlooking
-- Paragraph 4: What good looks like — one practical, honest recommendation a practitioner can act on
-- Close with exactly 3 hashtags on a new line: #ApplicationSecurity #CyberSecurity #AppSec
-- No emojis. No bold text inside the post. No bullet points. No headers inside the post.
-- Word count: 250 to 320 words
+- Line 1: One short, bold statement that challenges conventional thinking. Not a question.
+- 4 paragraphs, max 3 sentences each, no bullet points
+- Para 1: What is happening in AppSec right now — use sources above AND search for relevant CVEs, breaches, announcements from the past 14 days
+- Para 2: Why this matters at board and business level — translate technical risk to financial or reputational exposure
+- Para 3: What most security teams are getting wrong or missing
+- Para 4: One practical honest recommendation a practitioner can act on today
+- Final line: exactly these 3 hashtags: #ApplicationSecurity #CyberSecurity #AppSec
+- No emojis. No bold. No bullets. No sub-headers. 250-320 words total.
 
 ## THOUGHT LEADERSHIP QUOTE
-
-- 2 sentences maximum
-- Should sound like something a 15-year security veteran would say — not a vendor tagline
-- Format exactly as: "Quote text here." — AppSec & Security Leader
+- 2 sentences max, practitioner voice, not a vendor tagline
+- Format: "Quote." — AppSec and Security Leader
 
 ## IMAGE GENERATION PROMPT
-
-A DALL-E prompt for a LinkedIn post image:
-- Reflects the post theme
-- Style: dark, cinematic, Wired-magazine aesthetic — dramatic lighting, abstract or symbolic
-- No text, no faces, no logos
-- Dimensions: 1200 x 628 pixels landscape
-- Be specific: describe the exact scene, lighting, colour palette, and mood
+- Detailed DALL-E prompt for a 1200x628 LinkedIn image
+- Dark cinematic style, no text, no faces, no logos
+- Describe scene, lighting, colour palette, mood specifically
 
 ## POST TITLE
-
-One title for filing purposes — 10 words maximum, headline style
+- 10 words max, headline style, for your own filing
 
 ---
-IMPORTANT: Search your training knowledge for any AppSec, CVE, breach, or regulatory news from the past 14 days relevant to this topic. If the source articles are older than 2 weeks, treat them as context only and lead with what is current today.`;
-}
-}
-
-// ── Share via Android Share Sheet ────────────────────────────
-async function sharePrompt(prompt){
-  // Try native Web Share API (works on Android Chrome to share to any app including ChatGPT)
-  if(navigator.share){
-    try{
-      await navigator.share({title:"LinkedIn Post Prompt",text:prompt});
-      return true;
-    }catch(e){
-      if(e.name==="AbortError")return false; // user cancelled
-    }
-  }
-  // Fallback: copy to clipboard + open ChatGPT web
-  await navigator.clipboard?.writeText(prompt).catch(()=>{});
-  return false;
+IMPORTANT: If source articles are older than 2 weeks, treat as background only. Lead with what is current. Search for the latest AppSec, CVE, breach, or regulatory news from the past 14 days to enrich the post.`;
 }
 
 function Badge({text,color="slate"}){
@@ -225,10 +183,7 @@ function Badge({text,color="slate"}){
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[color]||c.slate}`}>{text}</span>;
 }
 function statusColor(s){return s==="Published"?"green":s==="Scheduled"?"blue":"gray";}
-function sourceColor(s){
-  const m={Checkmarx:"indigo",PortSwigger:"cyan",OWASP:"orange","Dark Reading":"red","Krebs on Security":"purple","The Hacker News":"teal"};
-  return m[s]||"slate";
-}
+function sourceColor(s){const m={Checkmarx:"indigo",PortSwigger:"cyan","Dark Reading":"red",Krebs:"purple","Hacker News":"teal","SANS ISC":"orange"};return m[s]||"slate";}
 
 // ── Bixby Guide ───────────────────────────────────────────────
 function BixbyGuide({onClose}){
@@ -236,45 +191,34 @@ function BixbyGuide({onClose}){
   return(
     <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
       <div className="bg-white rounded-t-2xl w-full max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b z-10">
+        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b">
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"/>
           <div className="flex justify-between items-center">
             <div><div className="font-bold text-lg">Bixby Routines Setup</div><div className="text-xs text-gray-400">Auto-trigger every Tuesday and Friday at 9 AM</div></div>
-            <button onClick={onClose} className="text-gray-400 text-2xl w-8 h-8 flex items-center justify-center">x</button>
+            <button onClick={onClose} className="text-gray-400 text-2xl w-8 h-8">x</button>
           </div>
         </div>
         <div className="p-5 space-y-4">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-700 leading-relaxed">
-            Bixby Routines is a Samsung system app. Chrome cannot open it directly — that is an Android security restriction. The steps below are the correct way to set this up on your Samsung device.
-          </div>
-
           {[
-            {n:1,title:"Open Bixby Routines",body:"On your Samsung phone go to Settings. Scroll down to Advanced Features. Tap Bixby Routines. If you do not see it, search for Bixby Routines in the Settings search bar."},
-            {n:2,title:"Create a new routine",body:'Tap the plus (+) button at the bottom right. Give it a name such as LinkedIn Blog Automation.'},
-            {n:3,title:"Set the IF trigger — Time",body:"Tap IF. Select Time. Set the time to 9:00 AM. Under Repeat, select Tuesday and Friday. Tap Done."},
-            {n:4,title:"Set the THEN action — Open app",body:"Tap THEN. Tap Add action. Select Apps. Select Open app. Choose Chrome from the list. In the URL field, paste the trigger URL shown below. Tap Done."},
-            {n:5,title:"Add a notification reminder (optional)",body:'Tap the plus (+) to add another THEN action. Select Send notification. Set title to: Blog post day. Set body to: Your app is fetching the latest AppSec topics now. Tap Done.'},
-            {n:6,title:"Save and enable",body:"Tap Save. Make sure the toggle next to your routine is switched ON. Bixby will now open your app automatically every Tuesday and Friday at 9 AM, fetch the latest topics, and have everything ready for you."},
+            {n:1,t:"Open Bixby Routines",b:"Settings → Advanced Features → Bixby Routines"},
+            {n:2,t:"Create a new routine",b:"Tap the + button. Name it: LinkedIn Blog Automation"},
+            {n:3,t:"Set the IF trigger",b:"Tap IF → Time → 9:00 AM → Repeat: Tuesday and Friday → Done"},
+            {n:4,t:"Set the THEN action",b:"Tap THEN → Add action → Apps → Open app → Chrome. In the URL field paste the trigger URL below. Tap Done."},
+            {n:5,t:"Add notification (optional)",b:"Tap + → Send notification. Title: Blog post day. Body: Fetching latest AppSec topics now."},
+            {n:6,t:"Save and enable",b:"Tap Save. Toggle the routine ON. Bixby will now open your app every Tuesday and Friday at 9 AM automatically."},
           ].map(s=>(
             <div key={s.n} className="flex gap-3 bg-gray-50 rounded-xl p-4">
               <div className="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">{s.n}</div>
-              <div><div className="font-semibold text-sm text-gray-800 mb-1">{s.title}</div><div className="text-xs text-gray-500 leading-relaxed">{s.body}</div></div>
+              <div><div className="font-semibold text-sm mb-1">{s.t}</div><div className="text-xs text-gray-500 leading-relaxed">{s.b}</div></div>
             </div>
           ))}
-
           <div className="bg-slate-800 rounded-xl p-4">
-            <div className="text-xs text-slate-400 font-medium mb-2 uppercase tracking-wide">Your Trigger URL — tap to copy</div>
+            <div className="text-xs text-slate-400 mb-2">Trigger URL — tap to copy</div>
             <div className="text-xs font-mono break-all text-green-400 bg-black/30 rounded-lg p-3"
-              onClick={()=>{navigator.clipboard?.writeText(triggerUrl);alert("Copied. Paste this into the Chrome URL field inside Bixby Routines.");}}>
+              onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(triggerUrl).then(()=>alert("Copied!"));}}>
               {triggerUrl}
             </div>
-            <div className="text-xs text-slate-400 mt-2">Tap the URL above to copy it to your clipboard</div>
           </div>
-
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 leading-relaxed">
-            <strong>Important:</strong> Make sure this app is installed on your home screen as a PWA before setting up Bixby. In Chrome, tap the three-dot menu and select Add to Home Screen. Bixby opens Chrome, which then loads the app at the trigger URL and automatically starts fetching topics.
-          </div>
-
           <button onClick={onClose} className="w-full bg-slate-800 text-white py-3 rounded-xl font-semibold text-sm">Done</button>
         </div>
       </div>
@@ -282,114 +226,118 @@ function BixbyGuide({onClose}){
   );
 }
 
-// ── TOPICS TAB (replaces Auto-Blog) ──────────────────────────
+// ── Topics Tab ────────────────────────────────────────────────
 function Topics({posts,setPosts}){
-  const [status,setStatus]=useState("idle"); // idle|fetching|ready|error
+  const [status,setStatus]=useState("idle");
   const [articles,setArticles]=useState([]);
   const [selected,setSelected]=useState([]);
   const [prompt,setPrompt]=useState("");
   const [showPrompt,setShowPrompt]=useState(false);
-  const [shareStatus,setShareStatus]=useState("idle"); // idle|copied|shared
+  const [btnState,setBtnState]=useState("idle");
   const [filterTag,setFilterTag]=useState("All");
 
   useEffect(()=>{
     const p=new URLSearchParams(window.location.search);
-    if(p.get("action")==="autoblog")fetchTopics();
+    if(p.get("action")==="autoblog")doFetch();
   },[]);
 
-  async function fetchTopics(){
+  useEffect(()=>{
+    if(selected.length>0)setPrompt(buildPrompt(selected));
+  },[selected]);
+
+  async function doFetch(){
     setStatus("fetching");setArticles([]);setSelected([]);setPrompt("");
-    try{
-      const items=await fetchAllTopics();
-      setArticles(items);
-      setStatus("ready");
-    }catch(e){setStatus("error");}
+    try{const items=await fetchAllTopics();setArticles(items);setStatus("ready");}
+    catch(e){setStatus("error");}
   }
 
   function toggleSelect(a){
     setSelected(prev=>{
-      const exists=prev.find(x=>x.link===a.link);
-      if(exists)return prev.filter(x=>x.link!==a.link);
-      if(prev.length>=3)return prev; // max 3
+      const exists=prev.find(x=>x.link===a.link&&x.title===a.title);
+      if(exists)return prev.filter(x=>!(x.link===a.link&&x.title===a.title));
+      if(prev.length>=3)return prev;
       return [...prev,a];
     });
   }
 
-  useEffect(()=>{
-    if(selected.length>0)setPrompt(buildMasterPrompt(selected));
-  },[selected]);
-
-  async function handleShare(){
+  async function handleSend(){
     if(!prompt)return;
-    setShareStatus("sharing");
-    const shared=await sharePrompt(prompt);
-    if(shared){
-      setShareStatus("shared");
-      setTimeout(()=>setShareStatus("idle"),3000);
-    }else{
-      // Fallback — copied to clipboard
-      await navigator.clipboard?.writeText(prompt).catch(()=>{});
-      setShareStatus("copied");
-      setTimeout(()=>setShareStatus("idle"),3000);
-      // Open ChatGPT web as fallback
-      setTimeout(()=>window.open("https://chat.openai.com/","_blank"),600);
+    setBtnState("sending");
+    try{
+      if(navigator.share){
+        await navigator.share({title:"LinkedIn Post Prompt",text:prompt});
+        setBtnState("sent");
+      }else{
+        await navigator.clipboard.writeText(prompt);
+        setBtnState("copied");
+        setTimeout(()=>window.open("https://chat.openai.com/","_blank"),500);
+      }
+    }catch(e){
+      await navigator.clipboard&&navigator.clipboard.writeText(prompt).catch(()=>{});
+      setBtnState("copied");
+      setTimeout(()=>window.open("https://chat.openai.com/","_blank"),500);
     }
+    setTimeout(()=>setBtnState("idle"),3000);
   }
 
-  function saveAsDraft(){
+  function saveDraft(){
     if(!selected.length)return;
-    const title=selected[0].title.slice(0,80);
-    const post={id:Date.now(),title,body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],source:selected[0].source};
-    const u=[...posts,post];setPosts(u);ls("posts",u);
-    alert("Saved as draft in Schedule tab.");
+    const post={id:Date.now(),title:selected[0].title.slice(0,80),body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],source:selected[0].source};
+    const u=[...posts,post];setPosts(u);store("posts",u);
+    alert("Saved as draft.");
   }
 
   const allTags=["All",...new Set(articles.map(a=>a.tag))];
   const filtered=filterTag==="All"?articles:articles.filter(a=>a.tag===filterTag);
+  const manualTopics=[
+    {title:"AI-generated code is creating a new class of vulnerabilities that SAST tools were not built to detect",tag:"AppSec"},
+    {title:"API-first architectures are outpacing security team readiness at every layer",tag:"AppSec"},
+    {title:"Why shift-left is failing and what shift-everywhere actually means in practice",tag:"AppSec"},
+    {title:"Software supply chain attacks have doubled — and most organisations still lack a complete SBOM",tag:"Supply Chain"},
+    {title:"LLM prompt injection is the SQL injection of 2025 — and we are repeating the same mistakes",tag:"AI Security"},
+    {title:"The real reason patch management keeps failing is not tooling — it is ownership",tag:"AppSec"},
+  ];
 
   return(
     <div className="space-y-4 pb-6">
-      {/* Header */}
       <div className="bg-slate-900 rounded-xl p-5 text-white">
         <div className="font-bold text-lg tracking-tight">AppSec Thought Leadership</div>
-        <div className="text-xs text-slate-400 mt-1">Pulls live topics from 6 security sources. Select 1 to 3, then send to ChatGPT.</div>
-        <div className="flex flex-wrap gap-2 mt-3">
+        <div className="text-xs text-slate-400 mt-1">Pulls live topics from 6 security sources. Select 1 to 3 then send to ChatGPT.</div>
+        <div className="flex flex-wrap gap-1.5 mt-3">
           {FEED_SOURCES.map(s=><Badge key={s.name} text={s.name} color={sourceColor(s.name)}/>)}
         </div>
       </div>
 
-      {/* What you get */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">One ChatGPT response gives you all three:</div>
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">One ChatGPT response gives you:</div>
         {[
-          {n:"1",title:"LinkedIn Post",bullets:["250-320 words, 4 tight paragraphs","No emojis, no bullet points — clean prose","Grounded in your selected topics + last 14 days of AppSec news"]},
-          {n:"2",title:"Thought Leadership Quote",bullets:["2 sentences, practitioner voice","Ready to use as a carousel slide or story","Attribution included"]},
-          {n:"3",title:"Image Generation Prompt",bullets:["Detailed DALL-E prompt in the same response","Paste directly into ChatGPT's image tab","Dark, cinematic, LinkedIn-ready visual"]},
+          {n:"1",t:"LinkedIn Post",pts:["250-320 words, 4 paragraphs, clean prose","No emojis, no bullet points, professional tone","Grounded in your topics + last 14 days of AppSec news"]},
+          {n:"2",t:"Thought Leadership Quote",pts:["2 sentences, practitioner voice","Ready for carousel or LinkedIn story","Attribution included"]},
+          {n:"3",t:"Image Generation Prompt",pts:["Detailed DALL-E prompt in same response","Paste into ChatGPT image tab to generate","Dark cinematic LinkedIn-ready visual"]},
         ].map(item=>(
-          <div key={item.n} className="border border-gray-100 rounded-xl p-3">
-            <div className="text-sm font-bold text-gray-800 mb-1.5">{item.n}. {item.title}</div>
-            {item.bullets.map((b,i)=>(
+          <div key={item.n} className="mb-3 border border-gray-100 rounded-xl p-3">
+            <div className="text-sm font-bold text-gray-800 mb-1.5">{item.n}. {item.t}</div>
+            {item.pts.map((p,i)=>(
               <div key={i} className="flex items-start gap-2 mb-1">
                 <div className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 shrink-0"/>
-                <div className="text-xs text-gray-500 leading-relaxed">{b}</div>
+                <div className="text-xs text-gray-500">{p}</div>
               </div>
             ))}
           </div>
         ))}
       </div>
 
-      {/* Fetch */}
       {status==="idle"&&(
-        <button onClick={fetchTopics} className="w-full bg-slate-800 text-white py-4 rounded-xl font-semibold text-sm active:bg-slate-700">
+        <button onClick={doFetch} className="w-full bg-slate-800 text-white py-4 rounded-xl font-semibold text-sm active:bg-slate-700">
           Fetch Latest Security Topics
         </button>
       )}
 
       {status==="fetching"&&(
         <div className="bg-white border rounded-xl p-10 text-center">
-          <div className="text-2xl spin mb-3">○</div>
+          <div className="text-2xl spin mb-3">◌</div>
           <div className="font-semibold text-gray-700 text-sm">Fetching from 6 security sources...</div>
-          <div className="text-xs text-gray-400 mt-1">Checkmarx, PortSwigger, OWASP, Dark Reading, Krebs, The Hacker News</div>
+          <div className="text-xs text-gray-400 mt-1">Checkmarx · PortSwigger · Dark Reading · Krebs · Hacker News · SANS</div>
         </div>
       )}
 
@@ -397,23 +345,16 @@ function Topics({posts,setPosts}){
         <div className="space-y-3">
           <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
             <div className="font-semibold text-red-700 text-sm">Could not fetch live topics</div>
-            <div className="text-xs text-red-400 mt-1 mb-4">The RSS proxy services may be temporarily down. Try again or use a manual topic below.</div>
-            <button onClick={fetchTopics} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium">Retry</button>
+            <div className="text-xs text-red-400 mt-1 mb-4">RSS proxy may be temporarily unavailable. Use a manual topic below or retry.</div>
+            <button onClick={doFetch} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium">Retry</button>
           </div>
-          {/* Manual fallback topics */}
           <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="font-semibold text-sm text-gray-700 mb-3">Or pick a manual topic to write about:</div>
+            <div className="font-semibold text-sm text-gray-700 mb-3">Manual topics — select one to write about:</div>
             <div className="space-y-2">
-              {[
-                {title:"AI-generated code is creating a new class of vulnerabilities that SAST tools weren't built for",source:"Manual",tag:"AppSec"},
-                {title:"The rise of API-first architectures is outpacing security team readiness",source:"Manual",tag:"AppSec"},
-                {title:"Why shift-left security is failing and what shift-everywhere actually means",source:"Manual",tag:"AppSec"},
-                {title:"Software supply chain attacks have doubled — and most organisations still lack an SBOM",source:"Manual",tag:"Supply Chain"},
-                {title:"LLM prompt injection is the SQL injection of 2025 — and we're repeating history",source:"Manual",tag:"AI Security"},
-              ].map((a,i)=>{
+              {manualTopics.map((a,i)=>{
                 const isSel=selected.find(x=>x.title===a.title);
                 return(
-                  <button key={i} onClick={()=>toggleSelect({...a,link:"",summary:"",date:""})}
+                  <button key={i} onClick={()=>toggleSelect({...a,link:"",summary:"",date:"",source:"Manual"})}
                     className={`w-full text-left border rounded-xl p-3 transition ${isSel?"border-slate-800 bg-slate-50":"bg-white border-gray-200"}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
@@ -434,28 +375,23 @@ function Topics({posts,setPosts}){
 
       {status==="ready"&&(
         <div className="fade space-y-4">
-          {/* Selection counter */}
           <div className="flex justify-between items-center">
             <div className="text-sm font-semibold text-gray-700">{articles.length} topics found</div>
             <div className="flex gap-2 items-center">
-              {selected.length>0&&<span className="text-xs text-blue-600 font-semibold">{selected.length} selected</span>}
+              {selected.length>0&&<span className="text-xs text-blue-600 font-semibold">{selected.length} selected (max 3)</span>}
               <button onClick={()=>{setStatus("idle");setArticles([]);setSelected([]);}} className="text-xs text-gray-400 border px-2 py-1 rounded-lg">Refresh</button>
             </div>
           </div>
-
-          {/* Tag filter */}
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {allTags.map(t=><button key={t} onClick={()=>setFilterTag(t)} className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition ${filterTag===t?"bg-slate-800 text-white":"bg-white border text-gray-600"}`}>{t}</button>)}
+            {allTags.map(t=><button key={t} onClick={()=>setFilterTag(t)} className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${filterTag===t?"bg-slate-800 text-white":"bg-white border text-gray-600"}`}>{t}</button>)}
           </div>
-
-          {/* Article cards */}
           <div className="space-y-2">
             {filtered.map((a,i)=>{
-              const isSel=selected.find(x=>x.link===a.link);
-              const isMaxed=selected.length>=3&&!isSel;
+              const isSel=selected.find(x=>x.title===a.title);
+              const maxed=selected.length>=3&&!isSel;
               return(
-                <button key={i} onClick={()=>!isMaxed&&toggleSelect(a)}
-                  className={`w-full text-left border rounded-xl p-4 transition ${isSel?"border-slate-800 bg-slate-50":isMaxed?"opacity-40 bg-white border-gray-100":"bg-white border-gray-200 active:bg-gray-50"}`}>
+                <button key={i} onClick={()=>!maxed&&toggleSelect(a)}
+                  className={`w-full text-left border rounded-xl p-4 transition ${isSel?"border-slate-800 bg-slate-50":maxed?"opacity-40 bg-white":"bg-white border-gray-200"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -463,64 +399,53 @@ function Topics({posts,setPosts}){
                         {a.date&&<span className="text-xs text-gray-400">{new Date(a.date).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>}
                       </div>
                       <div className="font-semibold text-sm text-gray-800 leading-snug">{a.title}</div>
-                      {a.summary&&<div className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{a.summary}</div>}
+                      {a.summary&&<div className="text-xs text-gray-500 mt-1 line-clamp-2">{a.summary}</div>}
                     </div>
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${isSel?"bg-slate-800 border-slate-800 text-white":"border-gray-300"}`}>
-                      {isSel&&<span className="text-xs font-bold">{selected.findIndex(x=>x.link===a.link)+1}</span>}
+                      {isSel&&<span className="text-xs font-bold">{selected.findIndex(x=>x.title===a.title)+1}</span>}
                     </div>
                   </div>
                 </button>
               );
             })}
           </div>
+        </div>
+      )}
 
-          {/* Prompt preview */}
-          {selected.length>0&&(
-            <div className="bg-white border rounded-xl overflow-hidden">
-              <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3">
-                <span className="text-sm font-semibold text-gray-700">Preview ChatGPT Prompt</span>
-                <span className="text-xs text-gray-400">{showPrompt?"hide":"show"}</span>
-              </button>
-              {showPrompt&&(
-                <div className="px-4 pb-4">
-                  <textarea className="w-full border rounded-xl p-3 text-xs h-48 resize-none bg-gray-50 text-gray-600 leading-relaxed" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
-                  <div className="text-xs text-gray-400 mt-1">You can edit this before sending</div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Action */}
-          {selected.length>0&&(
-            <div className="space-y-3">
-              <button onClick={handleShare}
-                className={`w-full py-4 rounded-xl font-bold text-sm transition ${shareStatus==="shared"?"bg-green-600 text-white":shareStatus==="copied"?"bg-amber-600 text-white":"bg-slate-800 text-white active:bg-slate-700"}`}>
-                {shareStatus==="shared"?"Sent to ChatGPT via Share Sheet":shareStatus==="copied"?"Prompt copied — ChatGPT opening in browser":"Send to ChatGPT"}
-              </button>
-
-              {/* How it works on Android */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 leading-relaxed space-y-2">
-                <div className="font-semibold text-slate-800">How this works on your Samsung</div>
-                <div>Tapping Send to ChatGPT uses Android's Share Sheet. Your phone will show a list of apps — select ChatGPT. The full prompt is shared directly into it. No copy-paste needed.</div>
-                <div>If ChatGPT is not in the share list, open the ChatGPT app once manually first, then return here and try again.</div>
-                <div className="font-semibold text-slate-700 mt-1">Inside ChatGPT:</div>
-                <div>1. The post will be generated with the image prompt included at the end</div>
-                <div>2. Tap the image icon in ChatGPT to generate the visual using the prompt in the response</div>
-                <div>3. Copy the LinkedIn post section and paste it on LinkedIn</div>
-                <div>4. Use the quote as your first comment or a carousel slide</div>
+      {selected.length>0&&(
+        <div className="space-y-3">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3">
+              <span className="text-sm font-semibold text-gray-700">Preview ChatGPT Prompt</span>
+              <span className="text-xs text-gray-400">{showPrompt?"hide":"show"}</span>
+            </button>
+            {showPrompt&&(
+              <div className="px-4 pb-4">
+                <textarea className="w-full border rounded-xl p-3 text-xs h-48 resize-none bg-gray-50 text-gray-600 leading-relaxed" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+                <div className="text-xs text-gray-400 mt-1">You can edit this before sending</div>
               </div>
+            )}
+          </div>
 
-              <div className="flex gap-2">
-                <button onClick={saveAsDraft} className="flex-1 border border-slate-300 text-slate-700 py-2.5 rounded-xl text-sm font-medium active:bg-slate-50">Save Draft</button>
-                <button onClick={()=>setSelected([])} className="flex-1 border text-gray-400 py-2.5 rounded-xl text-sm active:bg-gray-50">Clear Selection</button>
-              </div>
-            </div>
-          )}
+          <button onClick={handleSend}
+            className={`w-full py-4 rounded-xl font-bold text-sm transition ${btnState==="sent"?"bg-green-600 text-white":btnState==="copied"?"bg-amber-600 text-white":"bg-slate-800 text-white active:bg-slate-700"}`}>
+            {btnState==="sent"?"Sent to ChatGPT via Share Sheet":btnState==="copied"?"Prompt copied — ChatGPT opening":"Send to ChatGPT"}
+          </button>
 
-          {/* Bixby URL reminder */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-            <div className="text-xs font-semibold text-slate-700 mb-1">Bixby auto-trigger URL</div>
-            <div className="text-xs font-mono text-slate-500 break-all">{APP_URL}?action=autoblog</div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1.5 leading-relaxed">
+            <div className="font-semibold text-slate-800">How this works on Samsung</div>
+            <div>Tapping Send uses Android Share Sheet — select ChatGPT from the list of apps that appears. The full prompt goes directly into it.</div>
+            <div>If ChatGPT does not appear in the share list, open the ChatGPT app once manually, then come back and try again.</div>
+            <div className="font-semibold text-slate-700 mt-2">Inside ChatGPT:</div>
+            <div>1. Paste or accept the prompt and hit Send</div>
+            <div>2. Copy the LinkedIn Post section to LinkedIn</div>
+            <div>3. Tap the image icon in ChatGPT and paste the Image Generation Prompt to create your visual</div>
+            <div>4. Use the quote as your first comment or a carousel slide</div>
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={saveDraft} className="flex-1 border border-slate-300 text-slate-700 py-2.5 rounded-xl text-sm font-medium">Save Draft</button>
+            <button onClick={()=>setSelected([])} className="flex-1 border text-gray-400 py-2.5 rounded-xl text-sm">Clear</button>
           </div>
         </div>
       )}
@@ -534,7 +459,6 @@ function Home({contacts,posts,setTab,showBixby}){
   const todayCel=cel.filter(e=>e.days===0);
   const week7=cel.filter(e=>e.days>0&&e.days<=7);
   const strong=contacts.filter(c=>c.strength==="Strong").length;
-
   return(
     <div className="space-y-4 pb-6">
       {todayCel.length>0&&(
@@ -543,20 +467,17 @@ function Home({contacts,posts,setTab,showBixby}){
           {todayCel.map((e,i)=><div key={i} className="text-sm mt-1">{e.emoji} {e.type} — {e.name}</div>)}
         </div>
       )}
-
-      <button onClick={()=>setTab("Topics")} className="w-full bg-slate-900 rounded-xl p-5 text-white text-left active:opacity-90">
+      <button onClick={()=>setTab("Topics")} className="w-full bg-slate-900 rounded-xl p-5 text-white text-left">
         <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">AppSec Thought Leadership</div>
         <div className="font-bold text-lg">Fetch Today's Topics</div>
-        <div className="text-xs text-slate-400 mt-1">Pulls from 6 live security sources. Select 1-3 topics. Send to ChatGPT.</div>
-        <div className="mt-3 text-xs text-slate-300">Post · Quote · Image Prompt — all in one ChatGPT response</div>
+        <div className="text-xs text-slate-400 mt-1">6 live security sources · Select 1-3 topics · Send to ChatGPT</div>
+        <div className="mt-2 text-xs text-slate-300">Post · Quote · Image Prompt — one ChatGPT response</div>
       </button>
-
       <div className="bg-violet-700 rounded-xl p-4 text-white">
         <div className="font-bold text-sm">Bixby Auto-Trigger</div>
-        <div className="text-xs text-violet-200 mt-0.5 mb-3">Opens this app every Tuesday and Friday at 9 AM automatically</div>
+        <div className="text-xs text-violet-200 mt-0.5 mb-3">Opens this app every Tuesday and Friday at 9 AM</div>
         <button onClick={showBixby} className="bg-white text-violet-800 text-xs font-bold px-4 py-2 rounded-lg">Setup Guide</button>
       </div>
-
       <div className="grid grid-cols-2 gap-3">
         {[
           {label:"Contacts",value:contacts.length,sub:`${strong} strong`,tab:"Contacts"},
@@ -564,26 +485,24 @@ function Home({contacts,posts,setTab,showBixby}){
           {label:"Scheduled",value:posts.filter(p=>p.status==="Scheduled").length,sub:"upcoming",tab:"Schedule"},
           {label:"Celebrations",value:cel.length,sub:"this month",tab:"Events"},
         ].map(c=>(
-          <button key={c.label} onClick={()=>setTab(c.tab)} className="bg-white border border-gray-200 rounded-xl p-4 text-left active:bg-gray-50">
+          <button key={c.label} onClick={()=>setTab(c.tab)} className="bg-white border border-gray-200 rounded-xl p-4 text-left">
             <div className="text-2xl font-bold text-slate-800">{c.value}</div>
             <div className="text-sm font-semibold text-gray-700">{c.label}</div>
             <div className="text-xs text-gray-400">{c.sub}</div>
           </button>
         ))}
       </div>
-
       {week7.length>0&&(
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="font-semibold text-sm text-gray-700 mb-3">Coming up this week</div>
           {week7.map((e,i)=>(
             <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
-              <div><div className="text-sm font-medium text-gray-800">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div>
-              <div className="text-right"><div className="text-sm">{e.emoji}</div><div className="text-xs text-gray-400">{e.days}d</div></div>
+              <div><div className="text-sm font-medium">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div>
+              <div className="text-right"><div>{e.emoji}</div><div className="text-xs text-gray-400">{e.days}d</div></div>
             </div>
           ))}
         </div>
       )}
-
       <div className="bg-white border border-gray-200 rounded-xl p-4">
         <div className="font-semibold text-sm text-gray-700 mb-3">Connection Strength</div>
         {STRENGTHS.map(s=>{
@@ -593,7 +512,7 @@ function Home({contacts,posts,setTab,showBixby}){
             <div key={s} className="mb-2.5">
               <div className="flex justify-between text-xs text-gray-600 mb-1"><span>{s}</span><span>{count}</span></div>
               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${s==="Strong"?"bg-slate-800":s==="Warm"?"bg-amber-400":"bg-gray-300"}`} style={{width:`${pct}%`,transition:"width 0.5s"}}/>
+                <div className={`h-full rounded-full ${s==="Strong"?"bg-slate-800":s==="Warm"?"bg-amber-400":"bg-gray-300"}`} style={{width:`${pct}%`}}/>
               </div>
             </div>
           );
@@ -614,19 +533,18 @@ function Contacts({contacts,setContacts}){
 
   const filtered=contacts.filter(c=>
     (activeStr==="All"||c.strength===activeStr)&&
-    (c.name.toLowerCase().includes(search.toLowerCase())||
-    (c.company||"").toLowerCase().includes(search.toLowerCase()))
+    (c.name.toLowerCase().includes(search.toLowerCase())||(c.company||"").toLowerCase().includes(search.toLowerCase()))
   );
   const grouped={Strong:filtered.filter(c=>c.strength==="Strong"),Warm:filtered.filter(c=>c.strength==="Warm"),Cold:filtered.filter(c=>c.strength==="Cold")};
 
   function openAdd(){setForm({name:"",role:"",company:"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"",tags:""});setModal("add");}
-  function openEdit(c){setForm({...c,tags:c.tags.join(", ")});setModal("edit");}
+  function openEdit(c){setForm({...c,tags:(c.tags||[]).join(", ")});setModal("edit");}
   function saveContact(){
     const contact={...form,tags:form.tags?form.tags.split(",").map(t=>t.trim()).filter(Boolean):[]};
-    let u=modal==="add"?[...contacts,{...contact,id:Date.now()}]:contacts.map(c=>c.id===form.id?contact:c);
-    setContacts(u);ls("contacts",u);setModal(null);
+    const u=modal==="add"?[...contacts,{...contact,id:Date.now()}]:contacts.map(c=>c.id===form.id?contact:c);
+    setContacts(u);store("contacts",u);setModal(null);
   }
-  function del(id){if(!confirm("Delete this contact?"))return;const u=contacts.filter(c=>c.id!==id);setContacts(u);ls("contacts",u);}
+  function del(id){const u=contacts.filter(c=>c.id!==id);setContacts(u);store("contacts",u);}
 
   function handleCSV(e){
     const file=e.target.files[0];if(!file)return;
@@ -638,7 +556,7 @@ function Contacts({contacts,setContacts}){
         if(lines.length<2){alert("CSV appears empty.");setImporting(false);return;}
         const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
         const idx=k=>headers.findIndex(h=>h.includes(k));
-        const fI=idx("first"),lI=idx("last"),coI=idx("company"),roI=Math.max(idx("position"),idx("title"),idx("role")),emI=idx("email");
+        const fI=idx("first"),lI=idx("last"),coI=idx("company"),roI=Math.max(idx("position"),idx("title"),idx("role"));
         const imported=[];
         for(let i=1;i<lines.length;i++){
           const cols=lines[i].match(/(".*?"|[^,\n]+)/g)||[];
@@ -648,11 +566,10 @@ function Contacts({contacts,setContacts}){
           if(contacts.find(x=>x.name.toLowerCase()===name.toLowerCase()))continue;
           imported.push({id:Date.now()+i,name,role:roI>=0?c[roI]||"":"",company:coI>=0?c[coI]||"":"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"Imported from LinkedIn",tags:["LinkedIn"]});
         }
-        if(!imported.length){alert("No new contacts found. Duplicates were skipped.");setImporting(false);return;}
-        const u=[...contacts,...imported];
-        setContacts(u);ls("contacts",u);
-        alert(`Imported ${imported.length} contacts successfully.`);
-      }catch{alert("Could not read CSV. Make sure it is LinkedIn's Connections.csv file.");}
+        if(!imported.length){alert("No new contacts found.");setImporting(false);return;}
+        const u=[...contacts,...imported];setContacts(u);store("contacts",u);
+        alert(`Imported ${imported.length} contacts.`);
+      }catch{alert("Could not read CSV file.");}
       setImporting(false);fileRef.current.value="";
     };
     reader.readAsText(file);
@@ -662,28 +579,25 @@ function Contacts({contacts,setContacts}){
     <div className="space-y-4 pb-6">
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="font-semibold text-blue-800 text-sm mb-1">Import from LinkedIn</div>
-        <div className="text-xs text-blue-600 mb-3">LinkedIn app: Settings — Data Privacy — Get a copy of your data — select Connections — Request Archive. Download the CSV from your email and import it here.</div>
+        <div className="text-xs text-blue-600 mb-3">LinkedIn app: Settings — Data Privacy — Get a copy of your data — Connections — Request Archive. Download CSV from your email and import here.</div>
         <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleCSV}/>
         <button onClick={()=>fileRef.current.click()} disabled={importing} className="w-full bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
           {importing?"Importing...":"Import Connections.csv"}
         </button>
       </div>
-
       <div className="flex gap-2">
         <input className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm flex-1 bg-white" placeholder="Search contacts..." value={search} onChange={e=>setSearch(e.target.value)}/>
         <button onClick={openAdd} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium">Add</button>
       </div>
-
       <div className="flex gap-2 overflow-x-auto pb-1">
         {["All",...STRENGTHS].map(s=>(
-          <button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${activeStr===s?"bg-slate-800 text-white":"bg-white border border-gray-200 text-gray-600"}`}>
+          <button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${activeStr===s?"bg-slate-800 text-white":"bg-white border border-gray-200 text-gray-600"}`}>
             {s}{s!=="All"?` (${contacts.filter(c=>c.strength===s).length})`:""}
           </button>
         ))}
       </div>
       <div className="text-xs text-gray-400">{contacts.length} total contacts</div>
-
-      {(activeStr==="All"?STRENGTHS:[activeStr]).map(str=>grouped[str]?.length>0&&(
+      {(activeStr==="All"?STRENGTHS:[activeStr]).map(str=>grouped[str]&&grouped[str].length>0&&(
         <div key={str}>
           <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{str} ({grouped[str].length})</div>
           <div className="space-y-2">
@@ -699,7 +613,7 @@ function Contacts({contacts,setContacts}){
                   </div>
                   {cel.map((x,i)=><div key={i} className="text-xs text-rose-500 font-medium mt-1">{x}</div>)}
                   {c.notes&&<div className="text-xs text-gray-400 mt-1.5 italic">{c.notes}</div>}
-                  {c.tags?.length>0&&<div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>}
+                  {c.tags&&c.tags.length>0&&<div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>}
                   <div className="flex justify-between items-center mt-3">
                     {c.followUp&&<span className="text-xs text-amber-600">Follow-up: {c.followUp}</span>}
                     <div className="ml-auto flex gap-4">
@@ -713,7 +627,6 @@ function Contacts({contacts,setContacts}){
           </div>
         </div>
       ))}
-
       {modal&&(
         <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
           <div className="bg-white rounded-t-2xl p-5 w-full max-h-[90vh] overflow-y-auto">
@@ -721,10 +634,7 @@ function Contacts({contacts,setContacts}){
             <div className="font-bold text-lg mb-4">{modal==="add"?"Add Contact":"Edit Contact"}</div>
             <div className="space-y-3">
               {[["name","Full Name"],["role","Role / Title"],["company","Company"],["notes","Notes"]].map(([k,l])=>(
-                <div key={k}>
-                  <label className="text-xs text-gray-500 font-medium">{l}</label>
-                  <input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/>
-                </div>
+                <div key={k}><label className="text-xs text-gray-500 font-medium">{l}</label><input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-gray-500 font-medium">Industry</label><select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.industry||"Tech"} onChange={e=>setForm(p=>({...p,industry:e.target.value}))}>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
@@ -759,24 +669,21 @@ function Schedule({posts,setPosts}){
     const key=mon.toISOString().split("T")[0];
     if(!weeks[key])weeks[key]=[];weeks[key].push(p);
   });
-
   function handlePost(p){
     const text=`${p.title}\n\n${p.body}\n\n#ApplicationSecurity #CyberSecurity #AppSec`;
-    navigator.clipboard?.writeText(text).then(()=>{
-      setCopied(p.id);
-      setTimeout(()=>setCopied(null),3000);
+    navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>{
+      setCopied(p.id);setTimeout(()=>setCopied(null),3000);
       setTimeout(()=>window.open("https://www.linkedin.com/feed/","_blank"),500);
     });
   }
-  function markPublished(p){const u=posts.map(x=>x.id===p.id?{...x,status:"Published"}:x);setPosts(u);ls("posts",u);}
-  function deletePost(id){if(!confirm("Delete this post?"))return;const u=posts.filter(x=>x.id!==id);setPosts(u);ls("posts",u);}
-
+  function markPublished(p){const u=posts.map(x=>x.id===p.id?{...x,status:"Published"}:x);setPosts(u);store("posts",u);}
+  function deletePost(id){const u=posts.filter(x=>x.id!==id);setPosts(u);store("posts",u);}
   return(
     <div className="space-y-4 pb-6">
       <div className="bg-slate-900 rounded-xl p-4 text-white">
         <div className="font-bold text-lg">Publishing Schedule</div>
         <div className="text-xs text-slate-400 mt-1">AppSec Thought Leadership — Tuesday and Friday</div>
-        <div className="flex gap-4 mt-2 text-sm">
+        <div className="flex gap-4 mt-2 text-sm text-slate-300">
           <span>{posts.filter(p=>p.status==="Published").length} published</span>
           <span>{posts.filter(p=>p.status==="Scheduled").length} scheduled</span>
           <span>{posts.filter(p=>p.status==="Draft").length} drafts</span>
@@ -785,15 +692,15 @@ function Schedule({posts,setPosts}){
       {Object.keys(weeks).sort().map(w=>(
         <div key={w} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="bg-gray-50 px-4 py-2.5 border-b flex justify-between items-center">
-            <span className="font-semibold text-sm text-gray-700">Week of {w}</span>
+            <span className="font-semibold text-sm">Week of {w}</span>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${weeks[w].length>=2?"bg-green-100 text-green-700":"bg-amber-100 text-amber-700"}`}>{weeks[w].length}/2 posts</span>
           </div>
           {weeks[w].map(p=>(
             <div key={p.id} className="px-4 py-3 border-b last:border-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
-                  <div className="font-medium text-sm text-gray-800 leading-snug">{p.title}</div>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="font-medium text-sm leading-snug">{p.title}</div>
+                  <div className="flex gap-2 mt-1">
                     <span className="text-xs text-gray-400">{p.date}</span>
                     {p.source&&<Badge text={p.source} color={sourceColor(p.source)}/>}
                   </div>
@@ -818,7 +725,7 @@ function Schedule({posts,setPosts}){
   );
 }
 
-// ── Events (Celebrations) ─────────────────────────────────────
+// ── Events ────────────────────────────────────────────────────
 function Events({contacts}){
   const [wishModal,setWishModal]=useState(null);
   const [wishText,setWishText]=useState("");
@@ -829,33 +736,30 @@ function Events({contacts}){
     if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));all.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
   });
   all.sort((a,b)=>a.days-b.days);
-
   const tpl={
     Birthday:c=>`Happy Birthday, ${c.name}. Wishing you a great day and an even better year ahead. Your work in ${c.role||"the field"} continues to be an inspiration.`,
     "Work Anniversary":c=>`Congratulations on your work anniversary, ${c.name}. Your contributions as ${c.role||"a professional"} at ${c.company||"your organisation"} speak for themselves. Well deserved.`,
   };
-
   function openWish(c,t){setWishModal({c,t});setWishText(tpl[t]?.(c)||"");setCopied(false);}
-  async function copyAndOpen(){
-    await navigator.clipboard?.writeText(wishText);
-    setCopied(true);
-    setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.c.name)}`,"_blank"),400);
+  function copyAndOpen(){
+    navigator.clipboard&&navigator.clipboard.writeText(wishText).then(()=>{
+      setCopied(true);
+      setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.c.name)}`,"_blank"),400);
+    });
   }
-
   const sections=[
     {title:"Today",events:all.filter(e=>e.days===0),urgent:true},
     {title:"This Week",events:all.filter(e=>e.days>0&&e.days<=7)},
     {title:"This Month",events:all.filter(e=>e.days>7&&e.days<=30)},
   ];
-
   return(
     <div className="space-y-5 pb-6">
       <div className="bg-slate-900 rounded-xl p-4 text-white">
         <div className="font-bold text-lg">Birthdays and Anniversaries</div>
         <div className="flex gap-4 mt-2 text-sm text-slate-300">
           <span>Today: {all.filter(e=>e.days===0).length}</span>
-          <span>This week: {all.filter(e=>e.days<=7).length}</span>
-          <span>This month: {all.filter(e=>e.days<=30).length}</span>
+          <span>Week: {all.filter(e=>e.days<=7).length}</span>
+          <span>Month: {all.filter(e=>e.days<=30).length}</span>
         </div>
       </div>
       {all.length===0&&<div className="text-center py-12 text-gray-400 text-sm">Add birthdays and work anniversaries in the Contacts tab to see them here.</div>}
@@ -896,20 +800,17 @@ function Events({contacts}){
   );
 }
 
-// ── App ───────────────────────────────────────────────────────
+// ── App Root ──────────────────────────────────────────────────
 function App(){
   const [tab,setTab]=useState(()=>{
     const p=new URLSearchParams(window.location.search);
     if(p.get("action")==="autoblog")return "Topics";
-    return p.get("tab")||"Home";
+    return "Home";
   });
-  const [contacts,setContacts]=useState(()=>ls("contacts")||sampleContacts);
-  const [posts,setPosts]=useState(()=>ls("posts")||samplePosts);
+  const [contacts,setContacts]=useState(()=>store("contacts")||sampleContacts);
+  const [posts,setPosts]=useState(()=>store("posts")||samplePosts);
   const [showBixby,setShowBixby]=useState(false);
 
-  useEffect(()=>{if("Notification" in window&&Notification.permission==="default")Notification.requestPermission();},[]);
-
-  const icons={Home:"Home",Topics:"Topics",Contacts:"People",Schedule:"Schedule",Events:"Events"};
   const todayCel=getCelebrations(contacts).filter(e=>e.days===0).length;
 
   return(
@@ -920,17 +821,17 @@ function App(){
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xs">Li</div>
             <div>
-              <div className="font-bold text-gray-900 text-sm leading-tight">LinkedIn Pro Manager</div>
+              <div className="font-bold text-gray-900 text-sm">LinkedIn Pro Manager</div>
               <div className="text-xs text-gray-400">AppSec Thought Leadership</div>
             </div>
           </div>
           <div className="flex gap-1">
             {TABS.map(t=>(
               <button key={t} onClick={()=>setTab(t)}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-slate-900 text-white":"text-gray-500 hover:bg-gray-100"}`}>
+                className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-slate-900 text-white":"text-gray-500"}`}>
                 {t}
                 {t==="Events"&&todayCel>0&&(
-                  <span className="absolute -top-1 -right-0.5 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center leading-none">{todayCel}</span>
+                  <span className="absolute -top-1 -right-0.5 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">{todayCel}</span>
                 )}
               </button>
             ))}
@@ -947,10 +848,15 @@ function App(){
     </div>
   );
 }
+
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 <script>
-if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
 </script>
 </body>
 </html>
