@@ -1,838 +1,690 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <meta name="theme-color" content="#1e293b"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-title" content="Li Manager"/>
-  <link rel="manifest" href="manifest.json"/>
-  <title>LinkedIn Pro Manager</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    *{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
-    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;overscroll-behavior-y:none}
-    textarea,input,select{font-size:16px!important}
-    ::-webkit-scrollbar{display:none}
-    .safe-top{padding-top:env(safe-area-inset-top)}
-    .safe-bottom{padding-bottom:env(safe-area-inset-bottom)}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .spin{animation:spin 1s linear infinite;display:inline-block}
-    @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    .fade{animation:fade 0.3s ease forwards}
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0f172a"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="AppSec Brief"/>
+<link rel="manifest" href="manifest.json"/>
+<title>AppSec Thought Leadership Engine</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263248;--border:#334155;
+  --text:#f1f5f9;--muted:#94a3b8;--accent:#3b82f6;--green:#22c55e;
+  --amber:#f59e0b;--red:#ef4444;--purple:#a78bfa;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Layout */
+#app{display:flex;flex-direction:column;height:100vh;max-width:860px;margin:0 auto}
+header{padding:16px 20px 0;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.brand-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;letter-spacing:-.5px}
+.brand-text h1{font-size:15px;font-weight:700;color:var(--text)}
+.brand-text p{font-size:12px;color:var(--muted)}
+nav{display:flex;gap:4px;padding-bottom:0}
+nav button{flex:1;padding:8px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.3px;text-transform:uppercase}
+nav button.active{color:var(--text);border-bottom-color:var(--accent)}
+.divider{height:1px;background:var(--border);margin:0 0 0}
+
+main{flex:1;overflow-y:auto;padding:20px}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
+.card:last-child{margin-bottom:0}
+.card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+.card-title{font-size:14px;font-weight:600;color:var(--text);line-height:1.4;flex:1}
+.card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.card-summary{font-size:13px;color:var(--muted);line-height:1.5}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.3px}
+.tag-primary{background:#1e3a5f;color:#60a5fa}
+.tag-cluster{background:#1a2e1a;color:#4ade80}
+.tag-score{background:#2d1f4e;color:#c4b5fd}
+
+/* Score bar */
+.score-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.score-label{font-size:11px;color:var(--muted);width:80px;flex-shrink:0}
+.score-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.score-fill{height:100%;border-radius:2px;transition:width .4s ease}
+.score-num{font-size:11px;color:var(--muted);width:28px;text-align:right}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.2px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--muted)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+.btn-green{background:#166534;color:#86efac}
+.btn-green:hover{background:#15803d}
+.btn-full{width:100%}
+.btn-sm{padding:6px 12px;font-size:12px}
+
+/* Status */
+.status-row{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:16px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-green{background:var(--green)}
+.dot-amber{background:var(--amber)}
+.dot-red{background:var(--red)}
+.dot-pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Workbench */
+.workbench{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+.workbench h2{font-size:16px;font-weight:700;margin-bottom:4px}
+.workbench .subtitle{font-size:13px;color:var(--muted);margin-bottom:16px}
+.section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
+
+/* Prompt preview */
+.prompt-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--muted);line-height:1.7;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+
+/* Selected article highlight */
+.article-selected{border-color:var(--accent);background:var(--surface2)}
+
+/* Empty state */
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty-icon{font-size:36px;margin-bottom:12px;opacity:.4}
+.empty h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+.empty p{font-size:13px;line-height:1.5}
+
+/* Sources panel */
+.source-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.source-row:last-child{border-bottom:none}
+.source-info h4{font-size:13px;font-weight:600}
+.source-info p{font-size:12px;color:var(--muted)}
+.source-status{font-size:11px;font-weight:600}
+
+/* Share instruction */
+.share-steps{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:12px}
+.share-steps p{font-size:13px;color:var(--muted);margin-bottom:8px}
+.share-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;font-size:13px}
+.share-step:last-child{margin-bottom:0}
+.step-num{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none}
+#toast.show{opacity:1}
+
+/* Filters */
+.filter-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px}
+.filter-row::-webkit-scrollbar{display:none}
+.filter-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s}
+.filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* Scoring breakdown */
+.scores-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.score-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px}
+.score-item-label{font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.score-item-val{font-size:20px;font-weight:700}
+
+@media(max-width:480px){
+  main{padding:14px}
+  .scores-grid{grid-template-columns:1fr 1fr}
+}
+</style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const {useState,useEffect,useRef} = React;
+<div id="app">
+  <header>
+    <div class="brand">
+      <div class="brand-icon">AS</div>
+      <div class="brand-text">
+        <h1>AppSec Thought Leadership Engine</h1>
+        <p>Ingest · Score · Select · Write</p>
+      </div>
+    </div>
+    <nav>
+      <button class="active" onclick="showTab('feed')">Feed</button>
+      <button onclick="showTab('workbench')">Workbench</button>
+      <button onclick="showTab('sources')">Sources</button>
+    </nav>
+    <div class="divider"></div>
+  </header>
+  <main id="main-content"></main>
+</div>
+<div id="toast"></div>
 
-const APP_URL = "https://cxsmtp.github.io/LinkHelp/";
-const TABS = ["Home","Topics","Contacts","Schedule","Events"];
-const STRENGTHS = ["Strong","Warm","Cold"];
-const INDUSTRIES = ["Tech","Cybersecurity","Sales","Fintech","Healthcare","SaaS","Other"];
-const STATUSES = ["Draft","Scheduled","Published"];
+<script>
+// ── State ─────────────────────────────────────────────────────
+const STATE = {
+  tab: 'feed',
+  articles: [],
+  selected: null,
+  fetchStatus: 'idle', // idle | fetching | done | error
+  fetchLog: [],
+  filter: 'All',
+  lastFetch: null,
+};
 
-const FEED_SOURCES = [
-  {name:"Checkmarx",   url:"https://checkmarx.com/feed/",                    tag:"AppSec"},
-  {name:"Hacker News", url:"https://feeds.feedburner.com/TheHackersNews",    tag:"CVE/News"},
-  {name:"Krebs",       url:"https://krebsonsecurity.com/feed/",              tag:"Breaches"},
+// ── Sources ───────────────────────────────────────────────────
+const PRIMARY_SOURCES = [
+  { name: 'PortSwigger Research', url: 'https://portswigger.net/research/rss', tier: 1 },
+  { name: 'OWASP', url: 'https://owasp.org/feed.xml', tier: 1 },
+  { name: 'Google Project Zero', url: 'https://googleprojectzero.blogspot.com/feeds/posts/default', tier: 1 },
+  { name: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml', tier: 1 },
+  { name: 'CSO Online', url: 'https://www.csoonline.com/feed/', tier: 1 },
 ];
 
-const sampleContacts = [
-  {id:1,name:"Priya Sharma",role:"CISO",company:"CloudShield",industry:"Cybersecurity",strength:"Strong",followUp:"2026-03-18",birthday:"1988-07-15",workAnniversary:"2020-03-01",notes:"Met at Black Hat 2025",tags:["AppSec","CISO"]},
-  {id:2,name:"Marcus Lee",role:"AppSec Lead",company:"Palo Alto Networks",industry:"Cybersecurity",strength:"Warm",followUp:"2026-03-22",birthday:"1990-03-20",workAnniversary:"2022-06-10",notes:"Interested in AI threat modeling",tags:["AppSec","AI"]},
-  {id:3,name:"Ananya Iyer",role:"Head of Security Engineering",company:"FinEdge",industry:"Fintech",strength:"Strong",followUp:"2026-03-25",birthday:"1985-12-05",workAnniversary:"2019-03-12",notes:"Zero trust architecture",tags:["AppSec","ZeroTrust"]},
-];
-const samplePosts = [
-  {id:1,title:"The Hidden Cost of Insecure Code in the Age of AI",body:"Draft...",status:"Published",date:"2026-03-05",source:"Checkmarx"},
-  {id:2,title:"Why Zero Trust Fails Without Application-Layer Thinking",body:"Draft...",status:"Scheduled",date:"2026-03-14",source:"PortSwigger"},
+// ── Topic clusters ────────────────────────────────────────────
+const CLUSTERS = [
+  'New Vulnerabilities', 'Exploit Chains', 'Software Supply Chain',
+  'Malicious Packages', 'AI Application Security', 'Secure SDLC',
+  'Developer Risk', 'Cloud-Native AppSec', 'API Security',
+  'Governance & CISO', 'Regulatory', 'Threat Intelligence',
 ];
 
-function store(k,v){try{if(v!==undefined)localStorage.setItem(k,JSON.stringify(v));else{const x=localStorage.getItem(k);return x?JSON.parse(x):null;}}catch(e){return null;}}
-function getDaysUntil(mmdd){
-  const t0=new Date();t0.setHours(0,0,0,0);
-  const [m,d]=mmdd.split("-").map(Number);
-  let n=new Date(t0.getFullYear(),m-1,d);
-  if(n<t0)n.setFullYear(t0.getFullYear()+1);
-  return Math.round((n-t0)/86400000);
+// ── Scoring weights ───────────────────────────────────────────
+function scoreArticle(article) {
+  const text = (article.title + ' ' + article.summary).toLowerCase();
+  let novelty = 60, relevance = 60, execRelevance = 50, techDepth = 50,
+      businessConsequence = 50, discussionPotential = 55, defensibility = 60;
+
+  // Novelty signals
+  const noveltyWords = ['new', 'zero-day', 'critical', 'first', 'novel', 'emerging', 'discovered', 'uncovered', 'bypass', 'exploit'];
+  noveltyWords.forEach(w => { if (text.includes(w)) novelty = Math.min(100, novelty + 8); });
+
+  // Relevance to AppSec
+  const appSecWords = ['vulnerability', 'cve', 'appsec', 'application security', 'injection', 'xss', 'supply chain', 'dependency', 'api', 'authentication', 'authorization', 'sast', 'dast', 'devsecops', 'owasp', 'secure coding', 'patch', 'exploit', 'rce', 'sql', 'ssrf'];
+  appSecWords.forEach(w => { if (text.includes(w)) relevance = Math.min(100, relevance + 5); });
+
+  // Executive relevance
+  const execWords = ['ciso', 'breach', 'risk', 'governance', 'compliance', 'regulation', 'board', 'cost', 'million', 'enterprise', 'critical infrastructure', 'ransomware'];
+  execWords.forEach(w => { if (text.includes(w)) execRelevance = Math.min(100, execRelevance + 8); });
+
+  // Technical depth
+  const techWords = ['cve-', 'poc', 'proof of concept', 'payload', 'memory', 'buffer', 'heap', 'kernel', 'protocol', 'parser', 'deserializ', 'race condition', 'privilege escalation'];
+  techWords.forEach(w => { if (text.includes(w)) techDepth = Math.min(100, techDepth + 10); });
+
+  // Business consequence
+  const bizWords = ['impact', 'affected', 'exposed', 'compromised', 'data loss', 'shutdown', 'attack', 'targeted', 'customers', 'systems'];
+  bizWords.forEach(w => { if (text.includes(w)) businessConsequence = Math.min(100, businessConsequence + 7); });
+
+  // Discussion potential
+  const debateWords = ['debate', 'controversial', 'question', 'challenge', 'argue', 'disagree', 'versus', 'why', 'should', 'must', 'failure'];
+  debateWords.forEach(w => { if (text.includes(w)) discussionPotential = Math.min(100, discussionPotential + 8); });
+
+  // Penalise vendor marketing
+  const marketingWords = ['solution', 'platform', 'leading', 'revolutionary', 'best-in-class', 'announces', 'launches', 'partnership', 'award'];
+  marketingWords.forEach(w => { if (text.includes(w)) { novelty -= 10; defensibility -= 10; } });
+
+  // Cluster detection
+  let cluster = 'Threat Intelligence';
+  if (text.includes('supply chain') || text.includes('dependency') || text.includes('package')) cluster = 'Software Supply Chain';
+  else if (text.includes('ai') || text.includes('llm') || text.includes('machine learning')) cluster = 'AI Application Security';
+  else if (text.includes('api')) cluster = 'API Security';
+  else if (text.includes('cve') || text.includes('zero-day') || text.includes('vulnerability')) cluster = 'New Vulnerabilities';
+  else if (text.includes('exploit') || text.includes('chain') || text.includes('rce')) cluster = 'Exploit Chains';
+  else if (text.includes('ciso') || text.includes('governance') || text.includes('board')) cluster = 'Governance & CISO';
+  else if (text.includes('regulation') || text.includes('compliance') || text.includes('gdpr') || text.includes('nist')) cluster = 'Regulatory';
+  else if (text.includes('sdlc') || text.includes('devsecops') || text.includes('secure coding')) cluster = 'Secure SDLC';
+  else if (text.includes('cloud') || text.includes('kubernetes') || text.includes('container')) cluster = 'Cloud-Native AppSec';
+  else if (text.includes('developer') || text.includes('develo')) cluster = 'Developer Risk';
+
+  const total = Math.round((novelty + relevance + execRelevance + techDepth + businessConsequence + discussionPotential + defensibility) / 7);
+
+  return {
+    novelty: Math.max(0, Math.round(novelty)),
+    relevance: Math.max(0, Math.round(relevance)),
+    execRelevance: Math.max(0, Math.round(execRelevance)),
+    techDepth: Math.max(0, Math.round(techDepth)),
+    businessConsequence: Math.max(0, Math.round(businessConsequence)),
+    discussionPotential: Math.max(0, Math.round(discussionPotential)),
+    defensibility: Math.max(0, Math.round(defensibility)),
+    total: Math.max(0, Math.min(100, total)),
+    cluster,
+  };
 }
-function getCelebrations(contacts){
-  const ev=[];
-  contacts.forEach(c=>{
-    if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)ev.push({...c,type:"Birthday",emoji:"🎂",days:d});}
-    if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)ev.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
-  });
-  return ev.sort((a,b)=>a.days-b.days);
-}
 
-// RSS fetch via JSONP — bypasses CORS on mobile Chrome
-function fetchViaJsonp(url){
-  return new Promise((resolve,reject)=>{
-    const cb="rss_"+Math.random().toString(36).slice(2);
-    const script=document.createElement("script");
-    const timer=setTimeout(()=>{cleanup();reject(new Error("timeout"));},9000);
-    function cleanup(){clearTimeout(timer);delete window[cb];if(script.parentNode)script.remove();}
-    window[cb]=data=>{cleanup();resolve(data);};
-    script.src=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=4&callback=${cb}`;
-    script.onerror=()=>{cleanup();reject(new Error("script error"));};
+// ── RSS fetch ─────────────────────────────────────────────────
+function fetchViaJsonp(feedUrl) {
+  return new Promise((resolve, reject) => {
+    const cb = 'cb_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 9000);
+    function cleanup() { clearTimeout(timer); delete window[cb]; if (script.parentNode) script.remove(); }
+    window[cb] = data => { cleanup(); resolve(data); };
+    script.src = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=8&callback=${cb}`;
+    script.onerror = () => { cleanup(); reject(new Error('script error')); };
     document.head.appendChild(script);
   });
 }
 
-function parseItems(items,src){
-  return (items||[]).slice(0,3).map(i=>({
-    title:(i.title||"").trim(),
-    link:i.link||i.url||"",
-    summary:(i.description||i.content||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim().slice(0,350),
-    date:i.pubDate||i.published||"",
-    source:src.name,
-    tag:src.tag,
-  })).filter(i=>i.title);
-}
-
-async function fetchAllTopics(){
-  const results = await Promise.allSettled(
-    FEED_SOURCES.map(async src=>{
-      try{
-        const d = await fetchViaJsonp(src.url);
-        if(d.status==="ok"&&d.items&&d.items.length) return parseItems(d.items,src);
-      }catch(e){}
-      // fallback: allorigins
-      try{
-        const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
-        const d=await r.json();
-        const xml=d.contents||"";
-        const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||[];
-        if(matches.length){
-          return matches.slice(0,3).map(raw=>{
-            const get=tag=>{
-              const m=raw.match(new RegExp("<"+tag+"[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></"+tag+">|<"+tag+"[^>]*>([\\s\\S]*?)</"+tag+">"));
-              return m?(m[1]||m[2]||"").trim():"";
-            };
-            return{title:get("title"),link:get("link")||get("guid"),summary:get("description").replace(/<[^>]*>/g,"").slice(0,350),date:get("pubDate"),source:src.name,tag:src.tag};
-          }).filter(i=>i.title);
-        }
-      }catch(e){}
-      return [];
-    })
-  );
-  const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]).filter(a=>a.title);
-  if(!all.length)throw new Error("No topics fetched");
-  return all.sort((a,b)=>new Date(b.date)-new Date(a.date));
-}
-
-function buildPrompt(articles){
-  const today=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});
-  const block=articles.map((a,i)=>`SOURCE ${i+1} [${a.source} / ${a.tag}]
-Title: ${a.title}
-Summary: ${a.summary}
-URL: ${a.link}
-Date: ${a.date?new Date(a.date).toLocaleDateString("en-GB"):"Recent"}`).join("\n\n---\n\n");
-
-  return `Today: ${today}
-
-AUTHOR VOICE:
-- Strategic CISO perspective: connects AppSec risk to business and board-level decisions
-- Educator: makes complex security accessible to both executives and engineers
-- First-person, practitioner tone: measured, direct, no hype, no marketing language
-- Uses "I", "we", "in my experience"
-- No emojis. No exclamation marks. No bullet points inside the post.
-
-SOURCE MATERIAL:
-${block}
-
----
-PRODUCE EXACTLY THE FOLLOWING — use these headers:
-
-## LINKEDIN POST
-- Line 1: One short, bold statement that challenges conventional thinking. Not a question.
-- 4 paragraphs, max 3 sentences each, no bullet points
-- Para 1: What is happening in AppSec right now — use sources above AND search for relevant CVEs, breaches, announcements from the past 14 days
-- Para 2: Why this matters at board and business level — translate technical risk to financial or reputational exposure
-- Para 3: What most security teams are getting wrong or missing
-- Para 4: One practical honest recommendation a practitioner can act on today
-- Final line: exactly these 3 hashtags: #ApplicationSecurity #CyberSecurity #AppSec
-- No emojis. No bold. No bullets. No sub-headers. 250-320 words total.
-
-## THOUGHT LEADERSHIP QUOTE
-- 2 sentences max, practitioner voice, not a vendor tagline
-- Format: "Quote." — AppSec and Security Leader
-
-## IMAGE GENERATION PROMPT
-- Detailed DALL-E prompt for a 1200x628 LinkedIn image
-- Dark cinematic style, no text, no faces, no logos
-- Describe scene, lighting, colour palette, mood specifically
-
-## POST TITLE
-- 10 words max, headline style, for your own filing
-
----
-IMPORTANT: If source articles are older than 2 weeks, treat as background only. Lead with what is current. Search for the latest AppSec, CVE, breach, or regulatory news from the past 14 days to enrich the post.`;
-}
-
-function Badge({text,color="slate"}){
-  const c={slate:"bg-slate-100 text-slate-600",blue:"bg-blue-100 text-blue-700",green:"bg-green-100 text-green-700",yellow:"bg-yellow-100 text-yellow-800",red:"bg-red-100 text-red-700",purple:"bg-purple-100 text-purple-700",gray:"bg-gray-100 text-gray-600",orange:"bg-orange-100 text-orange-700",pink:"bg-pink-100 text-pink-700",indigo:"bg-indigo-100 text-indigo-700",teal:"bg-teal-100 text-teal-700",cyan:"bg-cyan-100 text-cyan-700"};
-  return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c[color]||c.slate}`}>{text}</span>;
-}
-function statusColor(s){return s==="Published"?"green":s==="Scheduled"?"blue":"gray";}
-function sourceColor(s){const m={Checkmarx:"indigo",PortSwigger:"cyan","Dark Reading":"red",Krebs:"purple","Hacker News":"teal","SANS ISC":"orange"};return m[s]||"slate";}
-
-// ── Bixby Guide ───────────────────────────────────────────────
-function BixbyGuide({onClose}){
-  const triggerUrl=APP_URL+"?action=autoblog";
-  return(
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-end">
-      <div className="bg-white rounded-t-2xl w-full max-h-[92vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white px-5 pt-4 pb-3 border-b">
-          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3"/>
-          <div className="flex justify-between items-center">
-            <div><div className="font-bold text-lg">Bixby Routines Setup</div><div className="text-xs text-gray-400">Auto-trigger every Tuesday and Friday at 9 AM</div></div>
-            <button onClick={onClose} className="text-gray-400 text-2xl w-8 h-8">x</button>
-          </div>
-        </div>
-        <div className="p-5 space-y-4">
-          {[
-            {n:1,t:"Open Bixby Routines",b:"Settings → Advanced Features → Bixby Routines"},
-            {n:2,t:"Create a new routine",b:"Tap the + button. Name it: LinkedIn Blog Automation"},
-            {n:3,t:"Set the IF trigger",b:"Tap IF → Time → 9:00 AM → Repeat: Tuesday and Friday → Done"},
-            {n:4,t:"Set the THEN action",b:"Tap THEN → Add action → Apps → Open app → Chrome. In the URL field paste the trigger URL below. Tap Done."},
-            {n:5,t:"Add notification (optional)",b:"Tap + → Send notification. Title: Blog post day. Body: Fetching latest AppSec topics now."},
-            {n:6,t:"Save and enable",b:"Tap Save. Toggle the routine ON. Bixby will now open your app every Tuesday and Friday at 9 AM automatically."},
-          ].map(s=>(
-            <div key={s.n} className="flex gap-3 bg-gray-50 rounded-xl p-4">
-              <div className="w-8 h-8 bg-slate-800 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">{s.n}</div>
-              <div><div className="font-semibold text-sm mb-1">{s.t}</div><div className="text-xs text-gray-500 leading-relaxed">{s.b}</div></div>
-            </div>
-          ))}
-          <div className="bg-slate-800 rounded-xl p-4">
-            <div className="text-xs text-slate-400 mb-2">Trigger URL — tap to copy</div>
-            <div className="text-xs font-mono break-all text-green-400 bg-black/30 rounded-lg p-3"
-              onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(triggerUrl).then(()=>alert("Copied!"));}}>
-              {triggerUrl}
-            </div>
-          </div>
-          <button onClick={onClose} className="w-full bg-slate-800 text-white py-3 rounded-xl font-semibold text-sm">Done</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Topics Tab ────────────────────────────────────────────────
-function Topics({posts,setPosts}){
-  const [status,setStatus]=useState("idle");
-  const [articles,setArticles]=useState([]);
-  const [selected,setSelected]=useState([]);
-  const [prompt,setPrompt]=useState("");
-  const [showPrompt,setShowPrompt]=useState(false);
-  const [btnState,setBtnState]=useState("idle");
-  const [filterTag,setFilterTag]=useState("All");
-
-  useEffect(()=>{
-    const p=new URLSearchParams(window.location.search);
-    if(p.get("action")==="autoblog")doFetch();
-  },[]);
-
-  useEffect(()=>{
-    if(selected.length>0)setPrompt(buildPrompt(selected));
-  },[selected]);
-
-  async function doFetch(){
-    setStatus("fetching");setArticles([]);setSelected([]);setPrompt("");
-    try{const items=await fetchAllTopics();setArticles(items);setStatus("ready");}
-    catch(e){setStatus("error");}
-  }
-
-  function toggleSelect(a){
-    setSelected(prev=>{
-      const exists=prev.find(x=>x.link===a.link&&x.title===a.title);
-      if(exists)return prev.filter(x=>!(x.link===a.link&&x.title===a.title));
-      if(prev.length>=3)return prev;
-      return [...prev,a];
-    });
-  }
-
-  async function handleSend(){
-    if(!prompt)return;
-    setBtnState("sending");
-    try{
-      if(navigator.share){
-        await navigator.share({title:"LinkedIn Post Prompt",text:prompt});
-        setBtnState("sent");
-      }else{
-        await navigator.clipboard.writeText(prompt);
-        setBtnState("copied");
-        setTimeout(()=>window.open("https://chat.openai.com/","_blank"),500);
-      }
-    }catch(e){
-      await navigator.clipboard&&navigator.clipboard.writeText(prompt).catch(()=>{});
-      setBtnState("copied");
-      setTimeout(()=>window.open("https://chat.openai.com/","_blank"),500);
+async function fetchSource(src) {
+  try {
+    const data = await fetchViaJsonp(src.url);
+    if (data.status === 'ok' && data.items && data.items.length) {
+      return data.items.slice(0, 6).map(i => ({
+        id: btoa((i.link || i.title || '').slice(0, 40)).slice(0, 12),
+        title: (i.title || '').trim(),
+        link: i.link || i.url || '',
+        summary: (i.description || i.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 400),
+        date: i.pubDate || i.published || '',
+        source: src.name,
+        tier: src.tier,
+      })).filter(i => i.title && i.link);
     }
-    setTimeout(()=>setBtnState("idle"),3000);
-  }
+  } catch (e) {}
 
-  function saveDraft(){
-    if(!selected.length)return;
-    const post={id:Date.now(),title:selected[0].title.slice(0,80),body:prompt,status:"Draft",date:new Date().toISOString().split("T")[0],source:selected[0].source};
-    const u=[...posts,post];setPosts(u);store("posts",u);
-    alert("Saved as draft.");
-  }
+  // Fallback: allorigins
+  try {
+    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`, { signal: AbortSignal.timeout(8000) });
+    const d = await r.json();
+    const xml = d.contents || '';
+    const matches = xml.match(/<item>([\s\S]*?)<\/item>/g) || xml.match(/<entry>([\s\S]*?)<\/entry>/g) || [];
+    if (matches.length) {
+      return matches.slice(0, 6).map(raw => {
+        const get = tag => {
+          const m = raw.match(new RegExp('<' + tag + '[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/' + tag + '>|<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>'));
+          return m ? (m[1] || m[2] || '').replace(/<[^>]*>/g, '').trim() : '';
+        };
+        const link = get('link') || get('guid') || raw.match(/<link[^>]*href="([^"]+)"/)?.[1] || '';
+        return { id: btoa(link.slice(0, 40)).slice(0, 12), title: get('title'), link, summary: get('description') || get('summary') || '', date: get('pubDate') || get('updated') || '', source: src.name, tier: src.tier };
+      }).filter(i => i.title && i.link);
+    }
+  } catch (e) {}
 
-  const allTags=["All",...new Set(articles.map(a=>a.tag))];
-  const filtered=filterTag==="All"?articles:articles.filter(a=>a.tag===filterTag);
-  const manualTopics=[
-    {title:"AI-generated code is creating a new class of vulnerabilities that SAST tools were not built to detect",tag:"AppSec"},
-    {title:"API-first architectures are outpacing security team readiness at every layer",tag:"AppSec"},
-    {title:"Why shift-left is failing and what shift-everywhere actually means in practice",tag:"AppSec"},
-    {title:"Software supply chain attacks have doubled — and most organisations still lack a complete SBOM",tag:"Supply Chain"},
-    {title:"LLM prompt injection is the SQL injection of 2025 — and we are repeating the same mistakes",tag:"AI Security"},
-    {title:"The real reason patch management keeps failing is not tooling — it is ownership",tag:"AppSec"},
-  ];
-
-  return(
-    <div className="space-y-4 pb-6">
-      <div className="bg-slate-900 rounded-xl p-5 text-white">
-        <div className="font-bold text-lg tracking-tight">AppSec Thought Leadership</div>
-        <div className="text-xs text-slate-400 mt-1">Pulls live topics from 6 security sources. Select 1 to 3 then send to ChatGPT.</div>
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {FEED_SOURCES.map(s=><Badge key={s.name} text={s.name} color={sourceColor(s.name)}/>)}
-        </div>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">One ChatGPT response gives you:</div>
-        {[
-          {n:"1",t:"LinkedIn Post",pts:["250-320 words, 4 paragraphs, clean prose","No emojis, no bullet points, professional tone","Grounded in your topics + last 14 days of AppSec news"]},
-          {n:"2",t:"Thought Leadership Quote",pts:["2 sentences, practitioner voice","Ready for carousel or LinkedIn story","Attribution included"]},
-          {n:"3",t:"Image Generation Prompt",pts:["Detailed DALL-E prompt in same response","Paste into ChatGPT image tab to generate","Dark cinematic LinkedIn-ready visual"]},
-        ].map(item=>(
-          <div key={item.n} className="mb-3 border border-gray-100 rounded-xl p-3">
-            <div className="text-sm font-bold text-gray-800 mb-1.5">{item.n}. {item.t}</div>
-            {item.pts.map((p,i)=>(
-              <div key={i} className="flex items-start gap-2 mb-1">
-                <div className="w-1 h-1 bg-gray-400 rounded-full mt-1.5 shrink-0"/>
-                <div className="text-xs text-gray-500">{p}</div>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {status==="idle"&&(
-        <button onClick={doFetch} className="w-full bg-slate-800 text-white py-4 rounded-xl font-semibold text-sm active:bg-slate-700">
-          Fetch Latest Security Topics
-        </button>
-      )}
-
-      {status==="fetching"&&(
-        <div className="bg-white border rounded-xl p-10 text-center">
-          <div className="text-2xl spin mb-3">◌</div>
-          <div className="font-semibold text-gray-700 text-sm">Fetching from 6 security sources...</div>
-          <div className="text-xs text-gray-400 mt-1">Checkmarx · PortSwigger · Dark Reading · Krebs · Hacker News · SANS</div>
-        </div>
-      )}
-
-      {status==="error"&&(
-        <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-center">
-          <div className="font-semibold text-red-700 text-sm">Could not fetch live topics</div>
-          <div className="text-xs text-red-400 mt-1 mb-4">Showing curated AppSec topics below. You can still select and send to ChatGPT.</div>
-          <div className="flex gap-2 justify-center">
-            <button onClick={doFetch} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-medium">Retry Live</button>
-            <button onClick={()=>{setArticles(CURATED_TOPICS);setStatus("ready");}} className="bg-slate-800 text-white px-6 py-2 rounded-xl text-sm font-medium">Use Curated Topics</button>
-          </div>
-        </div>
-      )}
-
-      {status==="ready"&&(
-        <div className="fade space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="text-sm font-semibold text-gray-700">{articles.length} topics found</div>
-            <div className="flex gap-2 items-center">
-              {selected.length>0&&<span className="text-xs text-blue-600 font-semibold">{selected.length} selected (max 3)</span>}
-              <button onClick={()=>{setStatus("idle");setArticles([]);setSelected([]);}} className="text-xs text-gray-400 border px-2 py-1 rounded-lg">Refresh</button>
-            </div>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {allTags.map(t=><button key={t} onClick={()=>setFilterTag(t)} className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${filterTag===t?"bg-slate-800 text-white":"bg-white border text-gray-600"}`}>{t}</button>)}
-          </div>
-          <div className="space-y-2">
-            {filtered.map((a,i)=>{
-              const isSel=selected.find(x=>x.title===a.title);
-              const maxed=selected.length>=3&&!isSel;
-              return(
-                <button key={i} onClick={()=>!maxed&&toggleSelect(a)}
-                  className={`w-full text-left border rounded-xl p-4 transition ${isSel?"border-slate-800 bg-slate-50":maxed?"opacity-40 bg-white":"bg-white border-gray-200"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <Badge text={a.source} color={sourceColor(a.source)}/>
-                        {a.date&&<span className="text-xs text-gray-400">{new Date(a.date).toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</span>}
-                      </div>
-                      <div className="font-semibold text-sm text-gray-800 leading-snug">{a.title}</div>
-                      {a.summary&&<div className="text-xs text-gray-500 mt-1 line-clamp-2">{a.summary}</div>}
-                    </div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${isSel?"bg-slate-800 border-slate-800 text-white":"border-gray-300"}`}>
-                      {isSel&&<span className="text-xs font-bold">{selected.findIndex(x=>x.title===a.title)+1}</span>}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {selected.length>0&&(
-        <div className="space-y-3">
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <button onClick={()=>setShowPrompt(p=>!p)} className="w-full flex justify-between items-center px-4 py-3">
-              <span className="text-sm font-semibold text-gray-700">Preview ChatGPT Prompt</span>
-              <span className="text-xs text-gray-400">{showPrompt?"hide":"show"}</span>
-            </button>
-            {showPrompt&&(
-              <div className="px-4 pb-4">
-                <textarea className="w-full border rounded-xl p-3 text-xs h-48 resize-none bg-gray-50 text-gray-600 leading-relaxed" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
-                <div className="text-xs text-gray-400 mt-1">You can edit this before sending</div>
-              </div>
-            )}
-          </div>
-
-          <button onClick={handleSend}
-            className={`w-full py-4 rounded-xl font-bold text-sm transition ${btnState==="sent"?"bg-green-600 text-white":btnState==="copied"?"bg-amber-600 text-white":"bg-slate-800 text-white active:bg-slate-700"}`}>
-            {btnState==="sent"?"Sent to ChatGPT via Share Sheet":btnState==="copied"?"Prompt copied — ChatGPT opening":"Send to ChatGPT"}
-          </button>
-
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1.5 leading-relaxed">
-            <div className="font-semibold text-slate-800">How this works on Samsung</div>
-            <div>Tapping Send uses Android Share Sheet — select ChatGPT from the list of apps that appears. The full prompt goes directly into it.</div>
-            <div>If ChatGPT does not appear in the share list, open the ChatGPT app once manually, then come back and try again.</div>
-            <div className="font-semibold text-slate-700 mt-2">Inside ChatGPT:</div>
-            <div>1. Paste or accept the prompt and hit Send</div>
-            <div>2. Copy the LinkedIn Post section to LinkedIn</div>
-            <div>3. Tap the image icon in ChatGPT and paste the Image Generation Prompt to create your visual</div>
-            <div>4. Use the quote as your first comment or a carousel slide</div>
-          </div>
-
-          <div className="flex gap-2">
-            <button onClick={saveDraft} className="flex-1 border border-slate-300 text-slate-700 py-2.5 rounded-xl text-sm font-medium">Save Draft</button>
-            <button onClick={()=>setSelected([])} className="flex-1 border text-gray-400 py-2.5 rounded-xl text-sm">Clear</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return [];
 }
 
-// ── Home ──────────────────────────────────────────────────────
-function Home({contacts,posts,setTab,showBixby}){
-  const cel=getCelebrations(contacts);
-  const todayCel=cel.filter(e=>e.days===0);
-  const week7=cel.filter(e=>e.days>0&&e.days<=7);
-  const strong=contacts.filter(c=>c.strength==="Strong").length;
-  return(
-    <div className="space-y-4 pb-6">
-      {todayCel.length>0&&(
-        <div className="bg-rose-600 rounded-xl p-4 text-white">
-          <div className="font-bold">Celebrations today</div>
-          {todayCel.map((e,i)=><div key={i} className="text-sm mt-1">{e.emoji} {e.type} — {e.name}</div>)}
+// ── Mock fallback articles ────────────────────────────────────
+const MOCK_ARTICLES = [
+  { id: 'mock1', title: 'Critical OAuth 2.0 Implementation Flaws Found in Major Platforms', link: '#', summary: 'Researchers have identified systemic OAuth 2.0 implementation weaknesses across multiple major platforms, enabling account takeover via token leakage in redirect flows. The flaws affect millions of users and stem from insufficient validation of redirect URIs in authorization code flows.', date: new Date().toISOString(), source: 'PortSwigger Research', tier: 1 },
+  { id: 'mock2', title: 'OWASP Updates Top 10 API Security Risks for 2025', link: '#', summary: 'OWASP has released an updated API Security Top 10, elevating Broken Object-Level Authorization and Unrestricted Resource Consumption as the most critical risks facing enterprises. The update reflects two years of real-world breach data.', date: new Date().toISOString(), source: 'OWASP', tier: 1 },
+  { id: 'mock3', title: 'Google Project Zero Discloses Windows Kernel Exploit Chain Used in Targeted Attacks', link: '#', summary: 'A newly disclosed exploit chain targeting Windows kernel components was used in targeted espionage campaigns for at least eight months before detection. The chain combines a heap overflow with a logic flaw in privilege validation.', date: new Date().toISOString(), source: 'Google Project Zero', tier: 1 },
+  { id: 'mock4', title: 'Supply Chain Attack Targets Widely Used npm Package with 40M Weekly Downloads', link: '#', summary: 'Attackers compromised the maintainer account of a widely used npm package and injected malicious code that exfiltrates environment variables at install time. The package has over 40 million weekly downloads and is a transitive dependency in thousands of enterprise applications.', date: new Date().toISOString(), source: 'Dark Reading', tier: 1 },
+  { id: 'mock5', title: 'CISOs Report AI-Generated Code Creating Unmanageable SAST Alert Volumes', link: '#', summary: 'A new survey of 400 enterprise CISOs reveals that AI-assisted development tools are generating code at a pace that existing SAST tooling cannot keep up with, with alert volumes increasing 340% in eighteen months while security headcount has remained flat.', date: new Date().toISOString(), source: 'CSO Online', tier: 1 },
+  { id: 'mock6', title: 'SSRF Vulnerabilities in Cloud-Native Architectures Bypassing IMDSv2 Protections', link: '#', summary: 'Security researchers have demonstrated techniques for bypassing AWS IMDSv2 protections via SSRF in containerised workloads, exploiting quirks in how HTTP clients handle hop-by-hop headers in service mesh configurations.', date: new Date().toISOString(), source: 'PortSwigger Research', tier: 1 },
+];
+
+// ── Fetch all ─────────────────────────────────────────────────
+async function fetchAll() {
+  STATE.fetchStatus = 'fetching';
+  STATE.fetchLog = [];
+  STATE.articles = [];
+  render();
+
+  const results = await Promise.allSettled(PRIMARY_SOURCES.map(src => fetchSource(src)));
+
+  let live = [];
+  results.forEach((r, i) => {
+    const src = PRIMARY_SOURCES[i];
+    if (r.status === 'fulfilled' && r.value.length) {
+      live = live.concat(r.value);
+      STATE.fetchLog.push({ name: src.name, count: r.value.length, ok: true });
+    } else {
+      STATE.fetchLog.push({ name: src.name, count: 0, ok: false });
+    }
+  });
+
+  // Deduplicate by title similarity
+  const seen = new Set();
+  live = live.filter(a => {
+    const key = a.title.toLowerCase().slice(0, 40);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+
+  // Score all
+  live = live.map(a => ({ ...a, scores: scoreArticle(a) }));
+
+  // If live fetch mostly failed, use mocks with scoring
+  if (live.length < 3) {
+    const mocked = MOCK_ARTICLES.map(a => ({ ...a, scores: scoreArticle(a), isMock: true }));
+    live = [...live, ...mocked];
+    STATE.fetchLog.push({ name: 'Curated fallback', count: mocked.length, ok: true });
+  }
+
+  // Sort by total score descending
+  live.sort((a, b) => b.scores.total - a.scores.total);
+
+  STATE.articles = live;
+  STATE.lastFetch = new Date();
+  STATE.fetchStatus = 'done';
+  STATE.filter = 'All';
+  render();
+}
+
+// ── Build ChatGPT prompt ──────────────────────────────────────
+function buildPrompt(article) {
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const scores = article.scores;
+  return `Today: ${today}
+Source: ${article.source} | Topic Cluster: ${scores.cluster}
+Scores — Novelty: ${scores.novelty}/100 | Relevance: ${scores.relevance}/100 | Exec Relevance: ${scores.execRelevance}/100 | Discussion Potential: ${scores.discussionPotential}/100
+
+ARTICLE SELECTED FOR ANALYSIS:
+Title: ${article.title}
+URL: ${article.link}
+Summary: ${article.summary}
+
+---
+You are acting as an editorial strategist and senior AppSec thought leader.
+Work through the following 5 steps in sequence. Show all work.
+
+STEP 4 — SYNTHESIZE
+Produce a concise briefing covering:
+- What happened or what is being claimed
+- Why it matters technically to AppSec practitioners
+- Why it matters commercially or operationally to CISOs and engineering leaders
+- What most people are missing or underestimating
+- What a CISO, AppSec head, or engineering leader should actually pay attention to
+
+STEP 5 — OBJECT TO ITSELF
+Before writing the final post, attack the draft take. Generate:
+- The strongest counterargument a senior practitioner would raise
+- What makes the take potentially weak, shallow, biased, or overstated
+- What an experienced CISO might push back on
+- Whether the take is too obvious, too vendor-adjacent, or too generic
+- Whether it is summarizing rather than leading
+Then rewrite the analysis to address those objections.
+
+STEP 6 — SIMULATE COMMENT REACTIONS
+Simulate 8 realistic audience comments from:
+1. Supportive CISO
+2. Skeptical AppSec engineer
+3. Cynical practitioner who has seen this before
+4. Developer team lead
+5. Cloud security architect
+6. Vendor-fatigued enterprise buyer
+7. Technically sharp critic
+8. Executive who wants business clarity, not technical detail
+Each comment must sound like a real professional. Some must disagree. Some must challenge assumptions. None should be cartoonish.
+
+STEP 7 — IMPROVE AFTER FEEDBACK
+Use the simulated reactions to produce a stronger version.
+Remove weak phrases. Tighten claims. Sharpen the opening line.
+Improve credibility and defensibility.
+
+STEP 8 — PRODUCE FINAL OUTPUT
+
+PUNCHLINE
+A single crisp line. Executive-grade. The opening line of the LinkedIn post.
+
+EXECUTIVE SUMMARY
+3-5 bullets. What it is and why it matters. No fluff.
+
+IMPROVED FINAL POST
+2-3 paragraphs in my voice. No emojis. No exclamation marks. No hashtags unless requested. No filler phrases. Take a clear position. Connect technical detail to business consequence. Sound like a real operator in the field.
+
+ALTERNATE HOOKS
+5 alternative opening lines.
+
+POSITIONING ANGLE
+Label as one of: contrarian | cautionary | strategic | operational | technical-to-business | CISO dilemma | developer-risk | governance-first
+
+ENGAGEMENT SCORE
+Rate 1-100 across: credibility | novelty | clarity | executive relevance | discussion potential | defensibility
+
+SOURCE REFERENCES
+List articles used with URLs and one-line relevance notes.
+
+---
+VOICE RULES (follow strictly):
+- Write like a seasoned security leader, not a journalist, marketer, or AI assistant
+- No emojis, no exclamation marks, no hashtags
+- No filler: "in today's rapidly evolving landscape", "it's important to note", "game changer", "paradigm shift", "leverage" as a buzzword, "moving forward", "journey"
+- Short to medium sentences. Dense with meaning.
+- Confident but not arrogant
+- 2-3 paragraphs only for the final post
+- Take a position. Do not sit on the fence.
+- Connect technical detail to business consequence
+- Sound like someone who has operated in this space, not someone who read about it`;
+}
+
+// ── Share to ChatGPT ──────────────────────────────────────────
+async function sendToChatGPT() {
+  if (!STATE.selected) return;
+  const prompt = buildPrompt(STATE.selected);
+  try {
+    await navigator.clipboard.writeText(prompt);
+  } catch (e) {}
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'AppSec Post Prompt', text: prompt });
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+  // Fallback
+  window.open('https://chat.openai.com/', '_blank');
+  showToast('Prompt copied to clipboard');
+}
+
+// ── Clipboard ─────────────────────────────────────────────────
+async function copyPrompt() {
+  if (!STATE.selected) return;
+  try {
+    await navigator.clipboard.writeText(buildPrompt(STATE.selected));
+    showToast('Prompt copied to clipboard');
+  } catch (e) {
+    showToast('Could not copy — try Send to ChatGPT instead');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Render helpers ────────────────────────────────────────────
+function scoreColor(n) {
+  if (n >= 75) return '#22c55e';
+  if (n >= 55) return '#f59e0b';
+  return '#ef4444';
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '';
+  const diff = (Date.now() - d) / 1000;
+  if (diff < 3600) return Math.round(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+  return Math.round(diff / 86400) + 'd ago';
+}
+
+function renderScoreBar(label, value) {
+  return `<div class="score-row">
+    <span class="score-label">${label}</span>
+    <div class="score-bar"><div class="score-fill" style="width:${value}%;background:${scoreColor(value)}"></div></div>
+    <span class="score-num">${value}</span>
+  </div>`;
+}
+
+// ── Tab: Feed ─────────────────────────────────────────────────
+function renderFeed() {
+  const clusters = ['All', ...new Set(STATE.articles.map(a => a.scores?.cluster).filter(Boolean))];
+  const filtered = STATE.filter === 'All' ? STATE.articles : STATE.articles.filter(a => a.scores?.cluster === STATE.filter);
+
+  let statusHtml = '';
+  if (STATE.fetchStatus === 'idle') {
+    statusHtml = `<div class="status-row"><div class="dot dot-amber"></div><span>Not yet fetched. Tap Refresh to load live articles.</span></div>`;
+  } else if (STATE.fetchStatus === 'fetching') {
+    statusHtml = `<div class="status-row"><div class="dot dot-green dot-pulse"></div><span>Fetching from ${PRIMARY_SOURCES.length} primary sources...</span></div>`;
+  } else if (STATE.fetchStatus === 'done') {
+    const live = STATE.fetchLog.filter(l => l.ok).length;
+    const ts = STATE.lastFetch ? STATE.lastFetch.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    statusHtml = `<div class="status-row"><div class="dot dot-green"></div><span>${STATE.articles.length} articles scored · ${live}/${PRIMARY_SOURCES.length} sources live · ${ts}</span><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="fetchAll()">Refresh</button></div>`;
+  } else if (STATE.fetchStatus === 'error') {
+    statusHtml = `<div class="status-row"><div class="dot dot-red"></div><span>Fetch failed. Showing curated fallback articles.</span><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="fetchAll()">Retry</button></div>`;
+  }
+
+  let filtersHtml = '';
+  if (STATE.articles.length > 0) {
+    filtersHtml = `<div class="filter-row">${clusters.map(c => `<button class="filter-btn ${STATE.filter === c ? 'active' : ''}" onclick="setFilter('${c}')">${c}</button>`).join('')}</div>`;
+  }
+
+  let articlesHtml = '';
+  if (STATE.fetchStatus === 'idle') {
+    articlesHtml = `<div class="empty"><div class="empty-icon">◎</div><h3>No articles loaded</h3><p>Tap Refresh to fetch the latest AppSec articles from primary sources and score them for thought leadership potential.</p><br><button class="btn btn-primary" onclick="fetchAll()">Fetch Latest Articles</button></div>`;
+  } else if (STATE.fetchStatus === 'fetching') {
+    articlesHtml = `<div class="empty"><div class="empty-icon">⟳</div><h3>Fetching and scoring...</h3><p>Pulling from PortSwigger, OWASP, Google Project Zero, Dark Reading, CSO Online</p></div>`;
+  } else if (filtered.length === 0) {
+    articlesHtml = `<div class="empty"><div class="empty-icon">◎</div><h3>No articles in this cluster</h3><p>Try a different filter or refresh.</p></div>`;
+  } else {
+    articlesHtml = filtered.map((a, idx) => {
+      const isSelected = STATE.selected && STATE.selected.id === a.id;
+      const isMock = a.isMock;
+      return `<div class="card ${isSelected ? 'article-selected' : ''}" onclick="selectArticle('${a.id}')">
+        <div class="card-header">
+          <div class="card-title">${a.title}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            <span style="font-size:20px;font-weight:800;color:${scoreColor(a.scores.total)}">${a.scores.total}</span>
+            <span style="font-size:10px;color:var(--muted)">/100</span>
+          </div>
         </div>
-      )}
-      <button onClick={()=>setTab("Topics")} className="w-full bg-slate-900 rounded-xl p-5 text-white text-left">
-        <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">AppSec Thought Leadership</div>
-        <div className="font-bold text-lg">Fetch Today's Topics</div>
-        <div className="text-xs text-slate-400 mt-1">6 live security sources · Select 1-3 topics · Send to ChatGPT</div>
-        <div className="mt-2 text-xs text-slate-300">Post · Quote · Image Prompt — one ChatGPT response</div>
+        <div class="card-meta">
+          <span class="tag tag-primary">${a.source}</span>
+          <span class="tag tag-cluster">${a.scores.cluster}</span>
+          ${isMock ? '<span class="tag" style="background:#2d1a00;color:#fb923c">Curated</span>' : ''}
+          ${a.date ? `<span style="font-size:11px;color:var(--muted)">${timeAgo(a.date)}</span>` : ''}
+        </div>
+        <div class="card-summary">${a.summary ? a.summary.slice(0, 160) + (a.summary.length > 160 ? '...' : '') : ''}</div>
+        ${renderScoreBar('Novelty', a.scores.novelty)}
+        ${renderScoreBar('Exec Relevance', a.scores.execRelevance)}
+        ${renderScoreBar('Discussion', a.scores.discussionPotential)}
+        ${isSelected ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px"><button class="btn btn-green btn-sm" onclick="event.stopPropagation();showTab('workbench')">Open in Workbench →</button><a href="${a.link}" target="_blank" class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Read Article</a></div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  return `${statusHtml}${filtersHtml}${articlesHtml}`;
+}
+
+// ── Tab: Workbench ────────────────────────────────────────────
+function renderWorkbench() {
+  if (!STATE.selected) {
+    return `<div class="empty"><div class="empty-icon">◎</div><h3>No article selected</h3><p>Go to the Feed tab, score articles, and tap one to select it. Then return here to generate your post.</p><br><button class="btn btn-primary" onclick="showTab('feed')">Go to Feed</button></div>`;
+  }
+
+  const a = STATE.selected;
+  const s = a.scores;
+  const prompt = buildPrompt(a);
+
+  return `<div class="workbench">
+    <h2>${a.title}</h2>
+    <div class="subtitle">${a.source} · ${s.cluster} · Overall score: <strong style="color:${scoreColor(s.total)}">${s.total}/100</strong></div>
+
+    <div class="scores-grid">
+      ${[['Novelty', s.novelty], ['Relevance', s.relevance], ['Exec Relevance', s.execRelevance], ['Tech Depth', s.techDepth], ['Biz Consequence', s.businessConsequence], ['Discussion', s.discussionPotential]].map(([l, v]) => `
+        <div class="score-item">
+          <div class="score-item-label">${l}</div>
+          <div class="score-item-val" style="color:${scoreColor(v)}">${v}</div>
+        </div>`).join('')}
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="section-label">Summary</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6">${a.summary || 'No summary available.'}</p>
+    </div>
+
+    ${a.link && a.link !== '#' ? `<div style="margin-top:12px"><a href="${a.link}" target="_blank" class="btn btn-ghost btn-sm">Read Original Article ↗</a></div>` : ''}
+
+    <div style="margin-top:20px">
+      <div class="section-label">ChatGPT Prompt — Steps 4 through 8</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">This prompt instructs ChatGPT to synthesize, challenge itself, simulate audience reactions, and produce a final executive-grade LinkedIn post in your voice.</p>
+      <div class="prompt-box">${prompt.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+      <button class="btn btn-green btn-full" onclick="sendToChatGPT()" style="font-size:15px;padding:14px">
+        Send to ChatGPT via Share Sheet
       </button>
-      <div className="bg-violet-700 rounded-xl p-4 text-white">
-        <div className="font-bold text-sm">Bixby Auto-Trigger</div>
-        <div className="text-xs text-violet-200 mt-0.5 mb-3">Opens this app every Tuesday and Friday at 9 AM</div>
-        <button onClick={showBixby} className="bg-white text-violet-800 text-xs font-bold px-4 py-2 rounded-lg">Setup Guide</button>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          {label:"Contacts",value:contacts.length,sub:`${strong} strong`,tab:"Contacts"},
-          {label:"Published",value:posts.filter(p=>p.status==="Published").length,sub:"posts",tab:"Schedule"},
-          {label:"Scheduled",value:posts.filter(p=>p.status==="Scheduled").length,sub:"upcoming",tab:"Schedule"},
-          {label:"Celebrations",value:cel.length,sub:"this month",tab:"Events"},
-        ].map(c=>(
-          <button key={c.label} onClick={()=>setTab(c.tab)} className="bg-white border border-gray-200 rounded-xl p-4 text-left">
-            <div className="text-2xl font-bold text-slate-800">{c.value}</div>
-            <div className="text-sm font-semibold text-gray-700">{c.label}</div>
-            <div className="text-xs text-gray-400">{c.sub}</div>
-          </button>
-        ))}
-      </div>
-      {week7.length>0&&(
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="font-semibold text-sm text-gray-700 mb-3">Coming up this week</div>
-          {week7.map((e,i)=>(
-            <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
-              <div><div className="text-sm font-medium">{e.name}</div><div className="text-xs text-gray-400">{e.role}</div></div>
-              <div className="text-right"><div>{e.emoji}</div><div className="text-xs text-gray-400">{e.days}d</div></div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="font-semibold text-sm text-gray-700 mb-3">Connection Strength</div>
-        {STRENGTHS.map(s=>{
-          const count=contacts.filter(c=>c.strength===s).length;
-          const pct=contacts.length?Math.round(count/contacts.length*100):0;
-          return(
-            <div key={s} className="mb-2.5">
-              <div className="flex justify-between text-xs text-gray-600 mb-1"><span>{s}</span><span>{count}</span></div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${s==="Strong"?"bg-slate-800":s==="Warm"?"bg-amber-400":"bg-gray-300"}`} style={{width:`${pct}%`}}/>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <button class="btn btn-ghost btn-full" onclick="copyPrompt()">Copy Prompt to Clipboard</button>
     </div>
-  );
+
+    <div class="share-steps">
+      <p style="font-weight:600;color:var(--text);margin-bottom:10px">How this works on your Samsung</p>
+      <div class="share-step"><div class="step-num">1</div><span>Tap Send to ChatGPT. Your Android Share Sheet will appear.</span></div>
+      <div class="share-step"><div class="step-num">2</div><span>Select ChatGPT from the list. If it does not appear, open the ChatGPT app once manually first.</span></div>
+      <div class="share-step"><div class="step-num">3</div><span>ChatGPT receives the full prompt. Hit Send. It will work through all 5 steps.</span></div>
+      <div class="share-step"><div class="step-num">4</div><span>Copy the Final Post section from ChatGPT's response. Paste directly into LinkedIn.</span></div>
+      <div class="share-step"><div class="step-num">5</div><span>Use the Image Generation Prompt section in ChatGPT's image tab to create your visual.</span></div>
+    </div>
+
+    <div style="margin-top:16px">
+      <button class="btn btn-ghost btn-full" onclick="showTab('feed')">← Back to Feed</button>
+    </div>
+  </div>`;
 }
 
-// ── Contacts ──────────────────────────────────────────────────
-function Contacts({contacts,setContacts}){
-  const [search,setSearch]=useState("");
-  const [modal,setModal]=useState(null);
-  const [form,setForm]=useState({});
-  const [activeStr,setActiveStr]=useState("All");
-  const [importing,setImporting]=useState(false);
-  const fileRef=useRef();
+// ── Tab: Sources ──────────────────────────────────────────────
+function renderSources() {
+  const logMap = {};
+  STATE.fetchLog.forEach(l => { logMap[l.name] = l; });
 
-  const filtered=contacts.filter(c=>
-    (activeStr==="All"||c.strength===activeStr)&&
-    (c.name.toLowerCase().includes(search.toLowerCase())||(c.company||"").toLowerCase().includes(search.toLowerCase()))
-  );
-  const grouped={Strong:filtered.filter(c=>c.strength==="Strong"),Warm:filtered.filter(c=>c.strength==="Warm"),Cold:filtered.filter(c=>c.strength==="Cold")};
-
-  function openAdd(){setForm({name:"",role:"",company:"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"",tags:""});setModal("add");}
-  function openEdit(c){setForm({...c,tags:(c.tags||[]).join(", ")});setModal("edit");}
-  function saveContact(){
-    const contact={...form,tags:form.tags?form.tags.split(",").map(t=>t.trim()).filter(Boolean):[]};
-    const u=modal==="add"?[...contacts,{...contact,id:Date.now()}]:contacts.map(c=>c.id===form.id?contact:c);
-    setContacts(u);store("contacts",u);setModal(null);
-  }
-  function del(id){const u=contacts.filter(c=>c.id!==id);setContacts(u);store("contacts",u);}
-
-  function handleCSV(e){
-    const file=e.target.files[0];if(!file)return;
-    setImporting(true);
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      try{
-        const lines=ev.target.result.split("\n").filter(l=>l.trim());
-        if(lines.length<2){alert("CSV appears empty.");setImporting(false);return;}
-        const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim().toLowerCase());
-        const idx=k=>headers.findIndex(h=>h.includes(k));
-        const fI=idx("first"),lI=idx("last"),coI=idx("company"),roI=Math.max(idx("position"),idx("title"),idx("role"));
-        const imported=[];
-        for(let i=1;i<lines.length;i++){
-          const cols=lines[i].match(/(".*?"|[^,\n]+)/g)||[];
-          const c=cols.map(x=>x.replace(/^"|"$/g,"").trim());
-          const name=`${fI>=0?c[fI]||"":""} ${lI>=0?c[lI]||"":""}`.trim();
-          if(!name)continue;
-          if(contacts.find(x=>x.name.toLowerCase()===name.toLowerCase()))continue;
-          imported.push({id:Date.now()+i,name,role:roI>=0?c[roI]||"":"",company:coI>=0?c[coI]||"":"",industry:"Tech",strength:"Warm",followUp:"",birthday:"",workAnniversary:"",notes:"Imported from LinkedIn",tags:["LinkedIn"]});
-        }
-        if(!imported.length){alert("No new contacts found.");setImporting(false);return;}
-        const u=[...contacts,...imported];setContacts(u);store("contacts",u);
-        alert(`Imported ${imported.length} contacts.`);
-      }catch{alert("Could not read CSV file.");}
-      setImporting(false);fileRef.current.value="";
-    };
-    reader.readAsText(file);
-  }
-
-  return(
-    <div className="space-y-4 pb-6">
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <div className="font-semibold text-blue-800 text-sm mb-1">Import from LinkedIn</div>
-        <div className="text-xs text-blue-600 mb-3">LinkedIn app: Settings — Data Privacy — Get a copy of your data — Connections — Request Archive. Download CSV from your email and import here.</div>
-        <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleCSV}/>
-        <button onClick={()=>fileRef.current.click()} disabled={importing} className="w-full bg-blue-700 text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50">
-          {importing?"Importing...":"Import Connections.csv"}
-        </button>
+  return `<div class="card" style="margin-bottom:16px">
+    <div class="section-label" style="margin-bottom:4px">Primary Sources — v1</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.5">These 5 primary sources are fetched, parsed, scored, and ranked on every refresh. Secondary and tertiary sources will be added in v2.</p>
+  </div>
+  ${PRIMARY_SOURCES.map(src => {
+    const log = logMap[src.name];
+    const status = !log ? 'Not yet fetched' : log.ok ? `${log.count} articles loaded` : 'Failed — fallback used';
+    const statusColor = !log ? 'var(--muted)' : log.ok ? 'var(--green)' : 'var(--amber)';
+    return `<div class="source-row">
+      <div class="source-info">
+        <h4>${src.name}</h4>
+        <p>${src.url}</p>
       </div>
-      <div className="flex gap-2">
-        <input className="border border-gray-200 rounded-xl px-3 py-2.5 text-sm flex-1 bg-white" placeholder="Search contacts..." value={search} onChange={e=>setSearch(e.target.value)}/>
-        <button onClick={openAdd} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium">Add</button>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {["All",...STRENGTHS].map(s=>(
-          <button key={s} onClick={()=>setActiveStr(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${activeStr===s?"bg-slate-800 text-white":"bg-white border border-gray-200 text-gray-600"}`}>
-            {s}{s!=="All"?` (${contacts.filter(c=>c.strength===s).length})`:""}
-          </button>
-        ))}
-      </div>
-      <div className="text-xs text-gray-400">{contacts.length} total contacts</div>
-      {(activeStr==="All"?STRENGTHS:[activeStr]).map(str=>grouped[str]&&grouped[str].length>0&&(
-        <div key={str}>
-          <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{str} ({grouped[str].length})</div>
-          <div className="space-y-2">
-            {grouped[str].map(c=>{
-              const cel=[];
-              if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));if(d<=30)cel.push(`Birthday in ${d}d`);}
-              if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));if(d<=30)cel.push(`Anniversary in ${d}d`);}
-              return(
-                <div key={c.id} className={`bg-white border rounded-xl p-4 ${cel.length?"border-rose-200":""}`}>
-                  <div className="flex justify-between items-start">
-                    <div><div className="font-semibold text-gray-800">{c.name}</div><div className="text-xs text-gray-400 mt-0.5">{c.role}{c.role&&c.company?" · ":""}{c.company}</div></div>
-                    <Badge text={c.industry} color="slate"/>
-                  </div>
-                  {cel.map((x,i)=><div key={i} className="text-xs text-rose-500 font-medium mt-1">{x}</div>)}
-                  {c.notes&&<div className="text-xs text-gray-400 mt-1.5 italic">{c.notes}</div>}
-                  {c.tags&&c.tags.length>0&&<div className="flex flex-wrap gap-1 mt-2">{c.tags.map(t=><Badge key={t} text={t} color="gray"/>)}</div>}
-                  <div className="flex justify-between items-center mt-3">
-                    {c.followUp&&<span className="text-xs text-amber-600">Follow-up: {c.followUp}</span>}
-                    <div className="ml-auto flex gap-4">
-                      <button onClick={()=>openEdit(c)} className="text-xs text-blue-600">Edit</button>
-                      <button onClick={()=>del(c.id)} className="text-xs text-red-400">Remove</button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-      {modal&&(
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
-          <div className="bg-white rounded-t-2xl p-5 w-full max-h-[90vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
-            <div className="font-bold text-lg mb-4">{modal==="add"?"Add Contact":"Edit Contact"}</div>
-            <div className="space-y-3">
-              {[["name","Full Name"],["role","Role / Title"],["company","Company"],["notes","Notes"]].map(([k,l])=>(
-                <div key={k}><label className="text-xs text-gray-500 font-medium">{l}</label><input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form[k]||""} onChange={e=>setForm(p=>({...p,[k]:e.target.value}))}/></div>
-              ))}
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-500 font-medium">Industry</label><select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.industry||"Tech"} onChange={e=>setForm(p=>({...p,industry:e.target.value}))}>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}</select></div>
-                <div><label className="text-xs text-gray-500 font-medium">Strength</label><select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.strength||"Warm"} onChange={e=>setForm(p=>({...p,strength:e.target.value}))}>{STRENGTHS.map(s=><option key={s}>{s}</option>)}</select></div>
-              </div>
-              <div><label className="text-xs text-gray-500 font-medium">Follow-up Date</label><input type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.followUp||""} onChange={e=>setForm(p=>({...p,followUp:e.target.value}))}/></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-500 font-medium">Birthday</label><input type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.birthday||""} onChange={e=>setForm(p=>({...p,birthday:e.target.value}))}/></div>
-                <div><label className="text-xs text-gray-500 font-medium">Work Anniversary</label><input type="date" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.workAnniversary||""} onChange={e=>setForm(p=>({...p,workAnniversary:e.target.value}))}/></div>
-              </div>
-              <div><label className="text-xs text-gray-500 font-medium">Tags (comma separated)</label><input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-0.5 bg-gray-50" value={form.tags||""} onChange={e=>setForm(p=>({...p,tags:e.target.value}))} placeholder="AppSec, CISO, ZeroTrust"/></div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={saveContact} className="flex-1 bg-slate-800 text-white py-3 rounded-xl text-sm font-semibold">Save</button>
-              <button onClick={()=>setModal(null)} className="flex-1 border border-gray-200 py-3 rounded-xl text-sm text-gray-600">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+      <span class="source-status" style="color:${statusColor}">${status}</span>
+    </div>`;
+  }).join('')}
+  <div style="margin-top:20px">
+    <button class="btn btn-primary btn-full" onclick="fetchAll()">Refresh All Sources</button>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="section-label" style="margin-bottom:8px">Scoring Dimensions</div>
+    ${[['Novelty', 'Is this new, surprising, or not yet widely discussed?'],
+       ['AppSec Relevance', 'How directly does this relate to application security?'],
+       ['Executive Relevance', 'Would a CISO or board care about this?'],
+       ['Technical Depth', 'Is there substance beyond the headline?'],
+       ['Business Consequence', 'Is there a clear commercial or operational impact?'],
+       ['Discussion Potential', 'Will this generate meaningful professional debate?'],
+       ['Defensibility', 'Can a strong position be taken without misinformation risk?'],
+    ].map(([l, d]) => `<div style="margin-bottom:10px"><div style="font-size:13px;font-weight:600;color:var(--text)">${l}</div><div style="font-size:12px;color:var(--muted)">${d}</div></div>`).join('')}
+  </div>`;
 }
 
-// ── Schedule ──────────────────────────────────────────────────
-function Schedule({posts,setPosts}){
-  const [copied,setCopied]=useState(null);
-  const sorted=[...posts].sort((a,b)=>a.date>b.date?1:-1);
-  const weeks={};
-  sorted.forEach(p=>{
-    const d=new Date(p.date);const mon=new Date(d);
-    mon.setDate(d.getDate()-d.getDay()+1);
-    const key=mon.toISOString().split("T")[0];
-    if(!weeks[key])weeks[key]=[];weeks[key].push(p);
+// ── Router ────────────────────────────────────────────────────
+function showTab(tab) {
+  STATE.tab = tab;
+  document.querySelectorAll('nav button').forEach((b, i) => {
+    b.classList.toggle('active', ['feed', 'workbench', 'sources'][i] === tab);
   });
-  function handlePost(p){
-    const text=`${p.title}\n\n${p.body}\n\n#ApplicationSecurity #CyberSecurity #AppSec`;
-    navigator.clipboard&&navigator.clipboard.writeText(text).then(()=>{
-      setCopied(p.id);setTimeout(()=>setCopied(null),3000);
-      setTimeout(()=>window.open("https://www.linkedin.com/feed/","_blank"),500);
-    });
-  }
-  function markPublished(p){const u=posts.map(x=>x.id===p.id?{...x,status:"Published"}:x);setPosts(u);store("posts",u);}
-  function deletePost(id){const u=posts.filter(x=>x.id!==id);setPosts(u);store("posts",u);}
-  return(
-    <div className="space-y-4 pb-6">
-      <div className="bg-slate-900 rounded-xl p-4 text-white">
-        <div className="font-bold text-lg">Publishing Schedule</div>
-        <div className="text-xs text-slate-400 mt-1">AppSec Thought Leadership — Tuesday and Friday</div>
-        <div className="flex gap-4 mt-2 text-sm text-slate-300">
-          <span>{posts.filter(p=>p.status==="Published").length} published</span>
-          <span>{posts.filter(p=>p.status==="Scheduled").length} scheduled</span>
-          <span>{posts.filter(p=>p.status==="Draft").length} drafts</span>
-        </div>
-      </div>
-      {Object.keys(weeks).sort().map(w=>(
-        <div key={w} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="bg-gray-50 px-4 py-2.5 border-b flex justify-between items-center">
-            <span className="font-semibold text-sm">Week of {w}</span>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${weeks[w].length>=2?"bg-green-100 text-green-700":"bg-amber-100 text-amber-700"}`}>{weeks[w].length}/2 posts</span>
-          </div>
-          {weeks[w].map(p=>(
-            <div key={p.id} className="px-4 py-3 border-b last:border-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <div className="font-medium text-sm leading-snug">{p.title}</div>
-                  <div className="flex gap-2 mt-1">
-                    <span className="text-xs text-gray-400">{p.date}</span>
-                    {p.source&&<Badge text={p.source} color={sourceColor(p.source)}/>}
-                  </div>
-                </div>
-                <Badge text={p.status} color={statusColor(p.status)}/>
-              </div>
-              {(p.status==="Scheduled"||p.status==="Draft")&&(
-                <div className="flex gap-2 mt-3">
-                  <button onClick={()=>handlePost(p)} className={`flex-1 text-xs py-2.5 rounded-xl font-semibold ${copied===p.id?"bg-green-600 text-white":"bg-slate-800 text-white"}`}>
-                    {copied===p.id?"Copied — LinkedIn opening":"Copy and Open LinkedIn"}
-                  </button>
-                  {p.status==="Scheduled"&&<button onClick={()=>markPublished(p)} className="text-xs border border-green-300 text-green-600 px-3 py-2 rounded-xl">Done</button>}
-                </div>
-              )}
-              <button onClick={()=>deletePost(p.id)} className="text-xs text-gray-300 mt-2">Remove</button>
-            </div>
-          ))}
-        </div>
-      ))}
-      {Object.keys(weeks).length===0&&<div className="text-center py-12 text-gray-400 text-sm">No posts yet. Fetch topics and save a draft to get started.</div>}
-    </div>
-  );
+  render();
 }
 
-// ── Events ────────────────────────────────────────────────────
-function Events({contacts}){
-  const [wishModal,setWishModal]=useState(null);
-  const [wishText,setWishText]=useState("");
-  const [copied,setCopied]=useState(false);
-  const all=[];
-  contacts.forEach(c=>{
-    if(c.birthday){const d=getDaysUntil(c.birthday.slice(5));all.push({...c,type:"Birthday",emoji:"🎂",days:d});}
-    if(c.workAnniversary){const d=getDaysUntil(c.workAnniversary.slice(5));all.push({...c,type:"Work Anniversary",emoji:"🏆",days:d});}
-  });
-  all.sort((a,b)=>a.days-b.days);
-  const tpl={
-    Birthday:c=>`Happy Birthday, ${c.name}. Wishing you a great day and an even better year ahead. Your work in ${c.role||"the field"} continues to be an inspiration.`,
-    "Work Anniversary":c=>`Congratulations on your work anniversary, ${c.name}. Your contributions as ${c.role||"a professional"} at ${c.company||"your organisation"} speak for themselves. Well deserved.`,
-  };
-  function openWish(c,t){setWishModal({c,t});setWishText(tpl[t]?.(c)||"");setCopied(false);}
-  function copyAndOpen(){
-    navigator.clipboard&&navigator.clipboard.writeText(wishText).then(()=>{
-      setCopied(true);
-      setTimeout(()=>window.open(`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(wishModal.c.name)}`,"_blank"),400);
-    });
-  }
-  const sections=[
-    {title:"Today",events:all.filter(e=>e.days===0),urgent:true},
-    {title:"This Week",events:all.filter(e=>e.days>0&&e.days<=7)},
-    {title:"This Month",events:all.filter(e=>e.days>7&&e.days<=30)},
-  ];
-  return(
-    <div className="space-y-5 pb-6">
-      <div className="bg-slate-900 rounded-xl p-4 text-white">
-        <div className="font-bold text-lg">Birthdays and Anniversaries</div>
-        <div className="flex gap-4 mt-2 text-sm text-slate-300">
-          <span>Today: {all.filter(e=>e.days===0).length}</span>
-          <span>Week: {all.filter(e=>e.days<=7).length}</span>
-          <span>Month: {all.filter(e=>e.days<=30).length}</span>
-        </div>
-      </div>
-      {all.length===0&&<div className="text-center py-12 text-gray-400 text-sm">Add birthdays and work anniversaries in the Contacts tab to see them here.</div>}
-      {sections.map(sec=>sec.events.length>0&&(
-        <div key={sec.title}>
-          <div className={`font-semibold text-sm mb-2 ${sec.urgent?"text-rose-600":"text-gray-600"}`}>{sec.title}</div>
-          <div className="space-y-2">
-            {sec.events.map((e,i)=>(
-              <div key={i} className={`bg-white border rounded-xl p-4 flex items-center justify-between ${sec.urgent?"border-rose-200":""}`}>
-                <div>
-                  <div className="font-semibold text-gray-800">{e.name}</div>
-                  <div className="text-xs text-gray-500">{e.role} — {e.company}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{e.type}{e.days===0?" — today":` — in ${e.days} days`}</div>
-                </div>
-                <button onClick={()=>openWish(e,e.type)} className="bg-slate-800 text-white text-xs px-3 py-2 rounded-xl">Write wish</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      {wishModal&&(
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-          <div className="bg-white rounded-t-2xl p-5 w-full">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"/>
-            <div className="font-bold text-lg mb-1">{wishModal.t}</div>
-            <div className="text-sm text-gray-500 mb-3">For {wishModal.c.name}</div>
-            <textarea className="w-full border border-gray-200 rounded-xl p-3 text-sm h-32 resize-none bg-gray-50 leading-relaxed" value={wishText} onChange={e=>setWishText(e.target.value)}/>
-            <div className="flex gap-2 mt-4">
-              <button onClick={copyAndOpen} className={`flex-1 py-3 rounded-xl text-sm font-semibold ${copied?"bg-green-600 text-white":"bg-slate-800 text-white"}`}>
-                {copied?"Copied — finding on LinkedIn":"Copy and find on LinkedIn"}
-              </button>
-              <button onClick={()=>setWishModal(null)} className="border border-gray-200 px-4 py-3 rounded-xl text-sm text-gray-600">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+function setFilter(f) {
+  STATE.filter = f;
+  render();
 }
 
-// ── App Root ──────────────────────────────────────────────────
-function App(){
-  const [tab,setTab]=useState(()=>{
-    const p=new URLSearchParams(window.location.search);
-    if(p.get("action")==="autoblog")return "Topics";
-    return "Home";
-  });
-  const [contacts,setContacts]=useState(()=>store("contacts")||sampleContacts);
-  const [posts,setPosts]=useState(()=>store("posts")||samplePosts);
-  const [showBixby,setShowBixby]=useState(false);
-
-  const todayCel=getCelebrations(contacts).filter(e=>e.days===0).length;
-
-  return(
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {showBixby&&<BixbyGuide onClose={()=>setShowBixby(false)}/>}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-40 safe-top">
-        <div className="px-4 pt-3 pb-2">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xs">Li</div>
-            <div>
-              <div className="font-bold text-gray-900 text-sm">LinkedIn Pro Manager</div>
-              <div className="text-xs text-gray-400">AppSec Thought Leadership</div>
-            </div>
-          </div>
-          <div className="flex gap-1">
-            {TABS.map(t=>(
-              <button key={t} onClick={()=>setTab(t)}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium relative transition-colors ${tab===t?"bg-slate-900 text-white":"text-gray-500"}`}>
-                {t}
-                {t==="Events"&&todayCel>0&&(
-                  <span className="absolute -top-1 -right-0.5 w-4 h-4 bg-rose-500 text-white text-xs rounded-full flex items-center justify-center">{todayCel}</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 overflow-y-auto px-4 pt-4 safe-bottom">
-        {tab==="Home"&&<Home contacts={contacts} posts={posts} setTab={setTab} showBixby={()=>setShowBixby(true)}/>}
-        {tab==="Topics"&&<Topics posts={posts} setPosts={setPosts}/>}
-        {tab==="Contacts"&&<Contacts contacts={contacts} setContacts={setContacts}/>}
-        {tab==="Schedule"&&<Schedule posts={posts} setPosts={setPosts}/>}
-        {tab==="Events"&&<Events contacts={contacts}/>}
-      </div>
-    </div>
-  );
+function selectArticle(id) {
+  const a = STATE.articles.find(x => x.id === id);
+  if (!a) return;
+  STATE.selected = STATE.selected && STATE.selected.id === id ? null : a;
+  render();
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
-</script>
-<script>
-if('serviceWorker' in navigator){
-  window.addEventListener('load',function(){
-    navigator.serviceWorker.register('sw.js').catch(function(){});
-  });
+function render() {
+  const el = document.getElementById('main-content');
+  if (STATE.tab === 'feed') el.innerHTML = renderFeed();
+  else if (STATE.tab === 'workbench') el.innerHTML = renderWorkbench();
+  else if (STATE.tab === 'sources') el.innerHTML = renderSources();
 }
+
+// ── Init ──────────────────────────────────────────────────────
+render();
 </script>
 </body>
 </html>
