@@ -207,53 +207,133 @@ function scoreArticle(a) {
   };
 }
 
-// ── RSS Fetch ─────────────────────────────────────────────────
+// ── RSS Fetch — Primary first, aggressive fallback ────────────
 function fetchViaJsonp(feedUrl){
   return new Promise((resolve,reject)=>{
     const cb='cb_'+Math.random().toString(36).slice(2);
     const script=document.createElement('script');
-    const timer=setTimeout(()=>{cleanup();reject(new Error('timeout'));},9000);
+    const timer=setTimeout(()=>{cleanup();reject(new Error('timeout'));},10000);
     function cleanup(){clearTimeout(timer);delete window[cb];if(script.parentNode)script.remove();}
     window[cb]=data=>{cleanup();resolve(data);};
+    // Try rss2json with JSONP — bypasses CORS entirely
     script.src=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=6&callback=${cb}`;
     script.onerror=()=>{cleanup();reject(new Error('error'));};
     document.head.appendChild(script);
   });
 }
 
+function parseRssJson(items, src){
+  return (items||[]).slice(0,6).map(i=>({
+    id:Math.random().toString(36).slice(2,10),
+    title:(i.title||'').trim(),
+    link:i.link||i.url||i.guid||'',
+    summary:(i.description||i.content||i.summary||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,400),
+    date:i.pubDate||i.published||i.date||'',
+    source:src.name,tier:src.tier,
+  })).filter(i=>i.title&&i.title.length>10);
+}
+
+function parseRssXml(xml, src){
+  const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||xml.match(/<entry>([\s\S]*?)<\/entry>/g)||[];
+  return matches.slice(0,6).map(raw=>{
+    const get=tag=>{
+      const m=raw.match(new RegExp('<'+tag+'[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></'+tag+'>|<'+tag+'[^>]*>([\\s\\S]*?)</'+tag+'>','i'));
+      return m?(m[1]||m[2]||'').replace(/<[^>]*>/g,'').trim():'';
+    };
+    const link=get('link')||get('guid')||raw.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1]||'';
+    const title=get('title');
+    if(!title||title.length<5)return null;
+    return{id:Math.random().toString(36).slice(2,10),title,link,summary:(get('description')||get('summary')||get('content')||'').slice(0,400),date:get('pubDate')||get('updated')||'',source:src.name,tier:src.tier};
+  }).filter(Boolean);
+}
+
 async function fetchSource(src){
-  // Method 1: rss2json JSONP
+  // Attempt 1: JSONP rss2json (best mobile CORS bypass)
   try{
     const d=await fetchViaJsonp(src.url);
-    if(d.status==='ok'&&d.items&&d.items.length){
-      return d.items.slice(0,6).map(i=>({
-        id:btoa((i.link||i.title||'').slice(0,40)).replace(/=/g,'').slice(0,12),
-        title:(i.title||'').trim(),
-        link:i.link||i.url||'',
-        summary:(i.description||i.content||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,400),
-        date:i.pubDate||i.published||'',
-        source:src.name,tier:src.tier,
-      })).filter(i=>i.title&&i.link);
+    if(d.status==='ok'&&d.items&&d.items.length>0){
+      const items=parseRssJson(d.items,src);
+      if(items.length>0)return items;
     }
   }catch(e){}
-  // Method 2: allorigins fallback
+
+  // Attempt 2: allorigins proxy
   try{
     const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
-    const d=await r.json();
-    const xml=d.contents||'';
-    const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||xml.match(/<entry>([\s\S]*?)<\/entry>/g)||[];
-    if(matches.length){
-      return matches.slice(0,6).map(raw=>{
-        const get=tag=>{const m=raw.match(new RegExp('<'+tag+'[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></'+tag+'>|<'+tag+'[^>]*>([\\s\\S]*?)</'+tag+'>'));return m?(m[1]||m[2]||'').replace(/<[^>]*>/g,'').trim():'';};
-        const link=get('link')||get('guid')||raw.match(/<link[^>]*href="([^"]+)"/)?.[1]||'';
-        return{id:btoa(link.slice(0,40)).replace(/=/g,'').slice(0,12),title:get('title'),link,summary:get('description')||get('summary')||'',date:get('pubDate')||get('updated')||'',source:src.name,tier:src.tier};
-      }).filter(i=>i.title&&i.link);
+    if(r.ok){
+      const d=await r.json();
+      const items=parseRssXml(d.contents||'',src);
+      if(items.length>0)return items;
     }
   }catch(e){}
+
+  // Attempt 3: corsproxy.io
+  try{
+    const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
+    if(r.ok){
+      const xml=await r.text();
+      const items=parseRssXml(xml,src);
+      if(items.length>0)return items;
+    }
+  }catch(e){}
+
   return[];
 }
 
-// ── Mock fallback ─────────────────────────────────────────────
+async function fetchAll(){
+  STATE.fetchStatus='fetching';STATE.fetchLog=[];STATE.articles=[];render();
+
+  // Always load curated first so UI is never empty
+  const curated=MOCK_ARTICLES.map(a=>({...a,scores:scoreArticle(a),isMock:true}));
+  STATE.articles=curated;render();
+
+  // Fetch primaries first (sequential for reliability), then secondaries+tertiaries in parallel
+  const primaryResults=[];
+  for(const src of PRIMARY_SOURCES){
+    const items=await fetchSource(src);
+    primaryResults.push({src,items});
+    STATE.fetchLog.push({name:src.name,tier:src.tier,count:items.length,ok:items.length>0});
+    if(items.length>0){
+      // Add to feed as they arrive
+      const scored=items.map(a=>({...a,scores:scoreArticle(a)}));
+      const existing=STATE.articles.filter(a=>a.isMock);
+      const deduped=dedup([...scored,...existing]);
+      STATE.articles=deduped.sort((a,b)=>b.scores.total-a.scores.total);
+      render();
+    }
+  }
+
+  // Then fetch secondary and tertiary in parallel
+  const restResults=await Promise.allSettled([...SECONDARY_SOURCES,...TERTIARY_SOURCES].map(src=>fetchSource(src)));
+  restResults.forEach((r,i)=>{
+    const src=[...SECONDARY_SOURCES,...TERTIARY_SOURCES][i];
+    const items=r.status==='fulfilled'?r.value:[];
+    STATE.fetchLog.push({name:src.name,tier:src.tier,count:items.length,ok:items.length>0});
+    if(items.length>0){
+      const scored=items.map(a=>({...a,scores:scoreArticle(a)}));
+      STATE.articles=dedup([...STATE.articles,...scored]).sort((a,b)=>b.scores.total-a.scores.total);
+    }
+  });
+
+  const liveCount=STATE.articles.filter(a=>!a.isMock).length;
+  // Keep curated only if we got very few live articles
+  if(liveCount>=4){
+    STATE.articles=STATE.articles.filter(a=>!a.isMock);
+  }
+  STATE.articles=STATE.articles.sort((a,b)=>b.scores.total-a.scores.total);
+  STATE.lastFetch=new Date();
+  STATE.fetchStatus='done';
+  STATE.filter='All';
+  render();
+}
+
+function dedup(articles){
+  const seen=new Set();
+  return articles.filter(a=>{
+    const k=(a.title||'').toLowerCase().slice(0,50);
+    if(seen.has(k))return false;seen.add(k);return true;
+  });
+}
 const MOCK_ARTICLES=[
   {id:'m1',title:'Critical OAuth 2.0 Implementation Flaws Found Across Major Platforms',link:'#',summary:'Researchers identified systemic OAuth 2.0 implementation weaknesses enabling account takeover via token leakage in redirect flows. The flaws affect millions of users and stem from insufficient validation of redirect URIs in authorization code flows.',date:new Date().toISOString(),source:'PortSwigger Research',tier:1},
   {id:'m2',title:'OWASP Updates API Security Top 10 — Broken Object-Level Authorization Remains Number One',link:'#',summary:'OWASP released an updated API Security Top 10, with BOLA remaining the top risk. The update reflects two years of real-world breach data showing API misconfiguration as a leading cause of enterprise data exposure.',date:new Date().toISOString(),source:'OWASP',tier:1},
