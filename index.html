@@ -4,11 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="theme-color" content="#0f172a"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-title" content="AppSec Brief"/>
-<link rel="manifest" href="manifest.json"/>
-<title>AppSec Thought Leadership Engine</title>
+<title>POV Lifecycle Dashboard</title>
+<script src="https://alcdn.msauth.net/browser/3.10.0/js/msal-browser.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -17,40 +14,47 @@
   --amber:#f59e0b;--red:#ef4444;--purple:#a78bfa;
 }
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6}
-::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
-#app{display:flex;flex-direction:column;height:100vh;max-width:860px;margin:0 auto}
+input,select,textarea{font-family:inherit;font-size:13px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+#app{display:flex;flex-direction:column;height:100vh;max-width:1100px;margin:0 auto}
 header{padding:16px 20px 0;flex-shrink:0}
 .brand{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .brand-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;letter-spacing:-.5px}
 .brand-text h1{font-size:15px;font-weight:700;color:var(--text)}
 .brand-text p{font-size:12px;color:var(--muted)}
-nav{display:flex;gap:4px;padding-bottom:0}
-nav button{flex:1;padding:8px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.3px;text-transform:uppercase}
+.brand-right{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+nav{display:flex;gap:4px}
+nav button{flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.4px;text-transform:uppercase}
 nav button.active{color:var(--text);border-bottom-color:var(--accent)}
+nav button .count{display:inline-block;background:var(--surface2);color:var(--text);border-radius:10px;font-size:10px;padding:1px 6px;margin-left:4px}
 .divider{height:1px;background:var(--border)}
-main{flex:1;overflow-y:auto;padding:20px}
+main{flex:1;overflow-y:auto;padding:18px 20px}
+.status-row{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;font-size:12px;flex-wrap:wrap}
+.status-row .grow{flex:1}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-green{background:var(--green)}
+.dot-amber{background:var(--amber)}
+.dot-red{background:var(--red)}
+.dot-pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
-.card:last-child{margin-bottom:0}
 .card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
 .card-title{font-size:14px;font-weight:600;color:var(--text);line-height:1.4;flex:1}
-.card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
-.card-summary{font-size:13px;color:var(--muted);line-height:1.5}
+.card-sub{font-size:12px;color:var(--muted)}
+.card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0 10px}
 .tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.3px}
-.tag-t1{background:#1e3a5f;color:#60a5fa}
-.tag-t2{background:#1a2e1a;color:#4ade80}
-.tag-t3{background:#2d1f4e;color:#c4b5fd}
-.tag-cluster{background:#1e3a5f;color:#7dd3fc}
+.tag-planned{background:#1a2e1a;color:#4ade80}
+.tag-progress{background:#1e3a5f;color:#60a5fa}
+.tag-done{background:#2d1f4e;color:#c4b5fd}
 .tag-mock{background:#2d1a00;color:#fb923c}
-.score-row{display:flex;align-items:center;gap:8px;margin-top:6px}
-.score-label{font-size:11px;color:var(--muted);width:88px;flex-shrink:0}
-.score-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
-.score-fill{height:100%;border-radius:2px;transition:width .4s ease}
-.score-num{font-size:11px;color:var(--muted);width:28px;text-align:right}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.2px}
+.tag-region{background:var(--surface2);color:var(--text)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:8px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.2px}
 .btn-primary{background:var(--accent);color:#fff}
 .btn-primary:hover{background:#2563eb}
 .btn-primary:disabled{background:var(--border);color:var(--muted);cursor:not-allowed}
@@ -58,681 +62,697 @@ main{flex:1;overflow-y:auto;padding:20px}
 .btn-ghost:hover{border-color:var(--accent);color:var(--text)}
 .btn-green{background:#166534;color:#86efac}
 .btn-green:hover{background:#15803d}
-.btn-full{width:100%}
-.btn-sm{padding:6px 12px;font-size:12px}
-.status-row{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:16px;font-size:13px}
-.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dot-green{background:var(--green)}
-.dot-amber{background:var(--amber)}
-.dot-red{background:var(--red)}
-.dot-pulse{animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.workbench{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
-.workbench h2{font-size:16px;font-weight:700;margin-bottom:4px}
-.workbench .subtitle{font-size:13px;color:var(--muted);margin-bottom:16px}
-.section-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px}
-.prompt-box{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--muted);line-height:1.7;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
-.article-selected{border-color:var(--accent);background:var(--surface2)}
+.btn-danger{background:#7f1d1d;color:#fecaca}
+.btn-danger:hover{background:#991b1b}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn-sm{padding:6px 10px;font-size:11px}
 .empty{text-align:center;padding:48px 20px;color:var(--muted)}
 .empty-icon{font-size:36px;margin-bottom:12px;opacity:.4}
 .empty h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
-.empty p{font-size:13px;line-height:1.5}
-.source-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
-.source-row:last-child{border-bottom:none}
-.source-info h4{font-size:13px;font-weight:600}
-.source-info p{font-size:11px;color:var(--muted)}
-.source-status{font-size:11px;font-weight:600;text-align:right;flex-shrink:0;margin-left:8px}
-.share-steps{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:12px}
-.share-step{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;font-size:13px}
-.share-step:last-child{margin-bottom:0}
-.step-num{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none}
+.empty p{font-size:13px;line-height:1.5;max-width:420px;margin:0 auto}
+.origins-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:10px}
+.origin-cell{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px}
+.origin-cell .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.origin-cell .val{font-size:18px;font-weight:700}
+.score-display{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.score-display .num{font-size:24px;font-weight:800;color:var(--accent);min-width:50px}
+.score-display .bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.score-display .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:3px;transition:width .4s ease}
+.kv{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px dashed var(--border)}
+.kv:last-child{border-bottom:none}
+.kv .k{color:var(--muted)}
+.kv .v{color:var(--text);font-weight:500}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:998;padding:20px}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:16px;font-weight:700;margin-bottom:4px}
+.modal .sub{font-size:13px;color:var(--muted);margin-bottom:16px}
+.form-row{margin-bottom:12px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;z-index:999;pointer-events:none;max-width:90vw;text-align:center}
 #toast.show{opacity:1}
-.filter-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:16px}
-.filter-row::-webkit-scrollbar{display:none}
-.filter-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s}
-.filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.scores-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-.score-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px}
-.score-item-label{font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
-.score-item-val{font-size:20px;font-weight:700}
-@media(max-width:480px){main{padding:14px}}
+#toast.error{background:var(--red)}
+.signin-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;text-align:center;padding:40px}
+.signin-screen h2{font-size:20px;font-weight:700}
+.signin-screen p{color:var(--muted);max-width:400px}
+.config-warn{background:#2d1a00;border:1px solid #fb923c;color:#fed7aa;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;line-height:1.5}
+.config-warn code{background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px;font-family:'SF Mono',Consolas,monospace;font-size:11px}
+@media(max-width:520px){
+  main{padding:14px}
+  .brand-right{display:none}
+}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <div class="brand">
-      <div class="brand-icon">AS</div>
+      <div class="brand-icon">POV</div>
       <div class="brand-text">
-        <h1>AppSec Thought Leadership Engine</h1>
-        <p>Ingest · Score · Select · Write</p>
+        <h1>POV Lifecycle Dashboard</h1>
+        <p>Track Checkmarx One POVs from planning to score</p>
       </div>
+      <div class="brand-right" id="userInfo"></div>
     </div>
     <nav>
-      <button class="active" onclick="showTab('feed')">Feed</button>
-      <button onclick="showTab('workbench')">Workbench</button>
-      <button onclick="showTab('sources')">Sources</button>
+      <button data-tab="main" class="active">Main <span class="count" id="cnt-main">0</span></button>
+      <button data-tab="monitoring">Monitoring <span class="count" id="cnt-monitoring">0</span></button>
+      <button data-tab="survey">Survey &amp; Scores <span class="count" id="cnt-survey">0</span></button>
     </nav>
-    <div class="divider"></div>
   </header>
-  <main id="main-content"></main>
+  <div class="divider"></div>
+  <main id="main"></main>
 </div>
+<div id="modalRoot"></div>
 <div id="toast"></div>
 
 <script>
-// ── State ─────────────────────────────────────────────────────
-const STATE = {
-  tab:'feed', articles:[], selected:null,
-  fetchStatus:'idle', fetchLog:[], filter:'All', lastFetch:null,
+'use strict';
+
+// ── CONFIG ──────────────────────────────────────────────────────
+// Edit these values for your environment, then deploy.
+const CONFIG = {
+  msal: {
+    clientId:    '<azure-ad-app-client-id>',          // Azure AD app registration (SPA)
+    tenantId:    '<your-aad-tenant-id>',              // Your Entra/AAD tenant ID
+    redirectUri: window.location.origin + window.location.pathname,
+    scopes:      ['Sites.Read.All', 'User.Read']
+  },
+  sharepoint: {
+    siteHost:   'yourtenant.sharepoint.com',          // e.g. contoso.sharepoint.com
+    sitePath:   '/sites/POVTracker',                  // SharePoint site path
+    listName:   'POVs',                               // SharePoint list display name or GUID
+    fieldMap: {                                       // SharePoint internal column name -> app field
+      title:        'Title',
+      customer:     'Customer',
+      status:       'Status',
+      startDate:    'StartDate',
+      endDate:      'EndDate',
+      cxOneRegion:  'TenantRegion',                   // values: us, eu, eu2, anz, india
+      cxOneTenant:  'TenantName',
+      ownerEmail:   'OwnerEmail',
+      surveyFormUrl:'SurveyLink'                      // optional per-POV override
+    },
+    statusValues: { planned: 'Planned', inProgress: 'In Progress', completed: 'Completed' }
+  },
+  cxOne: {
+    regions: {
+      us:    { iam: 'https://iam.checkmarx.net',       api: 'https://ast.checkmarx.net',    label: 'US' },
+      eu:    { iam: 'https://eu.iam.checkmarx.net',    api: 'https://eu.ast.checkmarx.net', label: 'EU' },
+      eu2:   { iam: 'https://eu-2.iam.checkmarx.net',  api: 'https://eu-2.ast.checkmarx.net',label: 'EU-2' },
+      anz:   { iam: 'https://anz.iam.checkmarx.net',   api: 'https://anz.ast.checkmarx.net',label: 'ANZ' },
+      india: { iam: 'https://ind.iam.checkmarx.net',   api: 'https://ind.ast.checkmarx.net',label: 'India' }
+    }
+  },
+  survey: {
+    defaultFormUrl: 'https://forms.office.com/r/XXXXXXXX'
+  }
 };
 
-// ── Sources — All 3 Tiers ─────────────────────────────────────
-const PRIMARY_SOURCES = [
-  {name:'Checkmarx Zero',       url:'https://checkmarx.com/feed/',                                       tier:1},
-  {name:'PortSwigger Research', url:'https://portswigger.net/research/rss',                               tier:1},
-  {name:'OWASP',                url:'https://owasp.org/feed.xml',                                         tier:1},
-  {name:'Google Project Zero',  url:'https://googleprojectzero.blogspot.com/feeds/posts/default',         tier:1},
-  {name:'Dark Reading',         url:'https://www.darkreading.com/rss.xml',                                tier:1},
-  {name:'CSO Online',           url:'https://www.csoonline.com/feed/',                                    tier:1},
-];
-const SECONDARY_SOURCES = [
-  {name:'Trail of Bits',        url:'https://blog.trailofbits.com/feed/',                                 tier:2},
-  {name:'GitHub Security Lab',  url:'https://securitylab.github.com/feed.xml',                           tier:2},
-  {name:'Sonatype Blog',        url:'https://blog.sonatype.com/rss.xml',                                  tier:2},
-  {name:'Socket Blog',          url:'https://socket.dev/blog/rss.xml',                                    tier:2},
-  {name:'Phil Venables',        url:'https://www.philvenables.com/feed',                                  tier:2},
-  {name:'Cloudflare AppSec',    url:'https://blog.cloudflare.com/tag/application-security/rss/',          tier:2},
-  {name:'Snyk Blog',            url:'https://snyk.io/blog/feed/',                                         tier:2},
-  {name:'Semgrep Blog',         url:'https://semgrep.dev/blog/feed.xml',                                  tier:2},
-  {name:'SecurityWeek',         url:'https://feeds.feedburner.com/Securityweek',                          tier:2},
-  {name:'Help Net Security',    url:'https://www.helpnetsecurity.com/feed/',                               tier:2},
-];
-const TERTIARY_SOURCES = [
-  {name:'Black Duck Blog',      url:'https://www.blackduck.com/blog/rss.xml',                             tier:3},
-  {name:'Veracode Blog',        url:'https://www.veracode.com/blog/feed',                                 tier:3},
-  {name:'The Hacker News',      url:'https://feeds.feedburner.com/TheHackersNews',                        tier:3},
-  {name:'SC Media',             url:'https://www.scmagazine.com/feed',                                    tier:3},
-  {name:'BleepingComputer',     url:'https://www.bleepingcomputer.com/feed/',                             tier:3},
-  {name:'Ars Technica Security',url:'https://feeds.arstechnica.com/arstechnica/security',                 tier:3},
-  {name:'ISACA',                url:'https://www.isaca.org/rss',                                          tier:3},
-  {name:'CISO Series',          url:'https://cisoseries.com/feed/',                                       tier:3},
-  {name:'SecureFlag Blog',      url:'https://blog.secureflag.com/feed',                                   tier:3},
-  {name:'RSAC Blog',            url:'https://www.rsaconference.com/feed',                                  tier:3},
-];
-const ALL_SOURCES = [...PRIMARY_SOURCES,...SECONDARY_SOURCES,...TERTIARY_SOURCES];
+const LS_KEY = 'povTracker:v1';
 
-// Tier score bonus
-const TIER_BONUS = {1:12, 2:6, 3:0};
+// ── STATE ───────────────────────────────────────────────────────
+const STATE = {
+  msal: null,
+  account: null,
+  tab: 'main',
+  povs: [],                    // normalized SharePoint items
+  loading: false,
+  loadError: null,
+  lastSync: null
+};
 
-// ── Scoring ───────────────────────────────────────────────────
-function scoreArticle(a) {
-  const text = (a.title+' '+a.summary).toLowerCase();
-  let novelty=60,relevance=60,execRel=50,techDepth=50,bizCon=50,discuss=55,defend=60;
-
-  ['new','zero-day','critical','first','novel','emerging','discovered','uncovered','bypass','exploit','unpatched','actively exploited','0day','remote code']
-    .forEach(w=>{if(text.includes(w))novelty=Math.min(100,novelty+8);});
-  ['vulnerability','cve','appsec','application security','injection','xss','supply chain','dependency','api security','authentication','authorization','sast','dast','devsecops','owasp','secure coding','patch','exploit','rce','ssrf','deserialization','privilege escalation','memory corruption','code execution']
-    .forEach(w=>{if(text.includes(w))relevance=Math.min(100,relevance+5);});
-  ['ciso','breach','risk','governance','compliance','regulation','board','cost','million','enterprise','critical infrastructure','ransomware','business impact','third party','vendor risk','data exposure','cyber insurance']
-    .forEach(w=>{if(text.includes(w))execRel=Math.min(100,execRel+8);});
-  ['cve-','poc','proof of concept','payload','memory','buffer','heap','kernel','protocol','parser','deserializ','race condition','gadget','shellcode','bypass technique','exploit chain']
-    .forEach(w=>{if(text.includes(w))techDepth=Math.min(100,techDepth+10);});
-  ['impact','affected','exposed','compromised','data loss','shutdown','targeted','customers','systems','critical','widespread','millions','infrastructure','production']
-    .forEach(w=>{if(text.includes(w))bizCon=Math.min(100,bizCon+7);});
-  ['debate','controversial','question','challenge','argue','disagree','versus','why','should','must','failure','wrong','myth','rethink','problem with','overlooked','underestimated']
-    .forEach(w=>{if(text.includes(w))discuss=Math.min(100,discuss+8);});
-  ['solution','leading provider','revolutionary','best-in-class','announces partnership','award','proud to','excited to','thrilled','we are pleased']
-    .forEach(w=>{if(text.includes(w)){novelty-=12;defend-=12;}});
-
-  let cluster='Threat Intelligence';
-  if(text.includes('supply chain')||text.includes('dependency')||text.includes('malicious package')||text.includes('npm')||text.includes('pypi'))cluster='Software Supply Chain';
-  else if(text.includes(' ai ')||text.includes('llm')||text.includes('machine learning')||text.includes('copilot')||text.includes('genai')||text.includes('artificial intelligence'))cluster='AI Application Security';
-  else if(text.includes('api security')||text.includes('api key')||text.includes('rest api')||text.includes('graphql'))cluster='API Security';
-  else if(text.includes('cve-')||text.includes('zero-day')||text.includes('0day')||text.includes('vulnerability disclosure'))cluster='New Vulnerabilities';
-  else if(text.includes('exploit')||text.includes('rce')||text.includes('exploit chain')||text.includes('payload'))cluster='Exploit Chains';
-  else if(text.includes('ciso')||text.includes('governance')||text.includes('board')||text.includes('risk management'))cluster='Governance & CISO';
-  else if(text.includes('regulation')||text.includes('compliance')||text.includes('gdpr')||text.includes('nist')||text.includes(' sec ')||text.includes('dora')||text.includes('cyber resilience act'))cluster='Regulatory';
-  else if(text.includes('sdlc')||text.includes('devsecops')||text.includes('secure coding')||text.includes('shift left')||text.includes('shift-left'))cluster='Secure SDLC';
-  else if(text.includes('cloud')||text.includes('kubernetes')||text.includes('container')||text.includes('k8s')||text.includes('serverless'))cluster='Cloud-Native AppSec';
-  else if(text.includes('developer')||text.includes('open source')||text.includes('oss '))cluster='Developer Risk';
-
-  const raw=(novelty+relevance+execRel+techDepth+bizCon+discuss+defend)/7;
-  const total=Math.min(100,Math.max(0,Math.round(raw+(TIER_BONUS[a.tier]||0))));
-  return {
-    novelty:Math.max(0,Math.round(novelty)),relevance:Math.max(0,Math.round(relevance)),
-    execRelevance:Math.max(0,Math.round(execRel)),techDepth:Math.max(0,Math.round(techDepth)),
-    businessConsequence:Math.max(0,Math.round(bizCon)),discussionPotential:Math.max(0,Math.round(discuss)),
-    defensibility:Math.max(0,Math.round(defend)),total,cluster,
-  };
+// ── localStorage POV store ──────────────────────────────────────
+function loadStore(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
+  catch(e){ return {}; }
+}
+function saveStore(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+function getLocal(povId){ return loadStore()[povId] || {}; }
+function setLocal(povId, patch){
+  const s = loadStore();
+  s[povId] = Object.assign({}, s[povId] || {}, patch);
+  saveStore(s);
+}
+function clearLocal(povId){
+  const s = loadStore();
+  delete s[povId];
+  saveStore(s);
 }
 
-// ── RSS Fetch — Primary first, aggressive fallback ────────────
-function fetchViaJsonp(feedUrl){
-  return new Promise((resolve,reject)=>{
-    const cb='cb_'+Math.random().toString(36).slice(2);
-    const script=document.createElement('script');
-    const timer=setTimeout(()=>{cleanup();reject(new Error('timeout'));},10000);
-    function cleanup(){clearTimeout(timer);delete window[cb];if(script.parentNode)script.remove();}
-    window[cb]=data=>{cleanup();resolve(data);};
-    // Try rss2json with JSONP — bypasses CORS entirely
-    script.src=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=6&callback=${cb}`;
-    script.onerror=()=>{cleanup();reject(new Error('error'));};
-    document.head.appendChild(script);
+// ── MSAL auth ───────────────────────────────────────────────────
+function configIsPlaceholder(){
+  return CONFIG.msal.clientId.startsWith('<') ||
+         CONFIG.msal.tenantId.startsWith('<') ||
+         CONFIG.sharepoint.siteHost.startsWith('yourtenant.');
+}
+
+async function initMsal(){
+  if (!window.msal) throw new Error('MSAL library failed to load');
+  STATE.msal = new window.msal.PublicClientApplication({
+    auth: {
+      clientId:    CONFIG.msal.clientId,
+      authority:   `https://login.microsoftonline.com/${CONFIG.msal.tenantId}`,
+      redirectUri: CONFIG.msal.redirectUri
+    },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
   });
+  await STATE.msal.initialize();
+  await STATE.msal.handleRedirectPromise();
+  const accounts = STATE.msal.getAllAccounts();
+  if (accounts.length) STATE.account = accounts[0];
 }
 
-function parseRssJson(items, src){
-  return (items||[]).slice(0,6).map(i=>({
-    id:Math.random().toString(36).slice(2,10),
-    title:(i.title||'').trim(),
-    link:i.link||i.url||i.guid||'',
-    summary:(i.description||i.content||i.summary||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,400),
-    date:i.pubDate||i.published||i.date||'',
-    source:src.name,tier:src.tier,
-  })).filter(i=>i.title&&i.title.length>10);
-}
-
-function parseRssXml(xml, src){
-  const matches=xml.match(/<item>([\s\S]*?)<\/item>/g)||xml.match(/<entry>([\s\S]*?)<\/entry>/g)||[];
-  return matches.slice(0,6).map(raw=>{
-    const get=tag=>{
-      const m=raw.match(new RegExp('<'+tag+'[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></'+tag+'>|<'+tag+'[^>]*>([\\s\\S]*?)</'+tag+'>','i'));
-      return m?(m[1]||m[2]||'').replace(/<[^>]*>/g,'').trim():'';
-    };
-    const link=get('link')||get('guid')||raw.match(/<link[^>]+href=["']([^"']+)["']/i)?.[1]||'';
-    const title=get('title');
-    if(!title||title.length<5)return null;
-    return{id:Math.random().toString(36).slice(2,10),title,link,summary:(get('description')||get('summary')||get('content')||'').slice(0,400),date:get('pubDate')||get('updated')||'',source:src.name,tier:src.tier};
-  }).filter(Boolean);
-}
-
-async function fetchSource(src){
-  // Attempt 1: JSONP rss2json (best mobile CORS bypass)
-  try{
-    const d=await fetchViaJsonp(src.url);
-    if(d.status==='ok'&&d.items&&d.items.length>0){
-      const items=parseRssJson(d.items,src);
-      if(items.length>0)return items;
-    }
-  }catch(e){}
-
-  // Attempt 2: allorigins proxy
-  try{
-    const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
-    if(r.ok){
-      const d=await r.json();
-      const items=parseRssXml(d.contents||'',src);
-      if(items.length>0)return items;
-    }
-  }catch(e){}
-
-  // Attempt 3: corsproxy.io
-  try{
-    const r=await fetch(`https://corsproxy.io/?${encodeURIComponent(src.url)}`,{signal:AbortSignal.timeout(8000)});
-    if(r.ok){
-      const xml=await r.text();
-      const items=parseRssXml(xml,src);
-      if(items.length>0)return items;
-    }
-  }catch(e){}
-
-  return[];
-}
-
-async function fetchAll(){
-  STATE.fetchStatus='fetching';STATE.fetchLog=[];STATE.articles=[];render();
-
-  // Always load curated first so UI is never empty
-  const curated=MOCK_ARTICLES.map(a=>({...a,scores:scoreArticle(a),isMock:true}));
-  STATE.articles=curated;render();
-
-  // Fetch primaries first (sequential for reliability), then secondaries+tertiaries in parallel
-  const primaryResults=[];
-  for(const src of PRIMARY_SOURCES){
-    const items=await fetchSource(src);
-    primaryResults.push({src,items});
-    STATE.fetchLog.push({name:src.name,tier:src.tier,count:items.length,ok:items.length>0});
-    if(items.length>0){
-      // Add to feed as they arrive
-      const scored=items.map(a=>({...a,scores:scoreArticle(a)}));
-      const existing=STATE.articles.filter(a=>a.isMock);
-      const deduped=dedup([...scored,...existing]);
-      STATE.articles=deduped.sort((a,b)=>b.scores.total-a.scores.total);
-      render();
-    }
+async function signIn(){
+  try {
+    const result = await STATE.msal.loginPopup({ scopes: CONFIG.msal.scopes });
+    STATE.account = result.account;
+    STATE.msal.setActiveAccount(result.account);
+    await loadPovs();
+    render();
+  } catch (e){
+    toast('Sign-in failed: ' + (e.message || e), true);
   }
+}
 
-  // Then fetch secondary and tertiary in parallel
-  const restResults=await Promise.allSettled([...SECONDARY_SOURCES,...TERTIARY_SOURCES].map(src=>fetchSource(src)));
-  restResults.forEach((r,i)=>{
-    const src=[...SECONDARY_SOURCES,...TERTIARY_SOURCES][i];
-    const items=r.status==='fulfilled'?r.value:[];
-    STATE.fetchLog.push({name:src.name,tier:src.tier,count:items.length,ok:items.length>0});
-    if(items.length>0){
-      const scored=items.map(a=>({...a,scores:scoreArticle(a)}));
-      STATE.articles=dedup([...STATE.articles,...scored]).sort((a,b)=>b.scores.total-a.scores.total);
-    }
-  });
-
-  const liveCount=STATE.articles.filter(a=>!a.isMock).length;
-  // Keep curated only if we got very few live articles
-  if(liveCount>=4){
-    STATE.articles=STATE.articles.filter(a=>!a.isMock);
-  }
-  STATE.articles=STATE.articles.sort((a,b)=>b.scores.total-a.scores.total);
-  STATE.lastFetch=new Date();
-  STATE.fetchStatus='done';
-  STATE.filter='All';
+async function signOut(){
+  await STATE.msal.logoutPopup({ account: STATE.account });
+  STATE.account = null;
+  STATE.povs = [];
   render();
 }
 
-function dedup(articles){
-  const seen=new Set();
-  return articles.filter(a=>{
-    const k=(a.title||'').toLowerCase().slice(0,50);
-    if(seen.has(k))return false;seen.add(k);return true;
+async function getGraphToken(){
+  const req = { scopes: ['https://graph.microsoft.com/.default'], account: STATE.account };
+  try {
+    const r = await STATE.msal.acquireTokenSilent(req);
+    return r.accessToken;
+  } catch (e){
+    if (e instanceof window.msal.InteractionRequiredAuthError){
+      const r = await STATE.msal.acquireTokenPopup(req);
+      return r.accessToken;
+    }
+    throw e;
+  }
+}
+
+// ── SharePoint loader ───────────────────────────────────────────
+async function graphGet(path, token){
+  const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
   });
+  if (!r.ok) throw new Error(`Graph ${r.status}: ${await r.text()}`);
+  return r.json();
 }
-const MOCK_ARTICLES=[
-  {id:'m1',title:'Critical OAuth 2.0 Implementation Flaws Found Across Major Platforms',link:'#',summary:'Researchers identified systemic OAuth 2.0 implementation weaknesses enabling account takeover via token leakage in redirect flows. The flaws affect millions of users and stem from insufficient validation of redirect URIs in authorization code flows.',date:new Date().toISOString(),source:'PortSwigger Research',tier:1},
-  {id:'m2',title:'OWASP Updates API Security Top 10 — Broken Object-Level Authorization Remains Number One',link:'#',summary:'OWASP released an updated API Security Top 10, with BOLA remaining the top risk. The update reflects two years of real-world breach data showing API misconfiguration as a leading cause of enterprise data exposure.',date:new Date().toISOString(),source:'OWASP',tier:1},
-  {id:'m3',title:'Google Project Zero Discloses Windows Kernel Exploit Chain Used in Espionage Campaigns',link:'#',summary:'A disclosed exploit chain targeting Windows kernel components was used in targeted espionage campaigns for eight months before detection. The chain combines a heap overflow with a logic flaw in privilege validation, requiring no user interaction.',date:new Date().toISOString(),source:'Google Project Zero',tier:1},
-  {id:'m4',title:'Supply Chain Attack Targets npm Package with 40 Million Weekly Downloads',link:'#',summary:'Attackers compromised a maintainer account and injected malicious code that exfiltrates environment variables at install time. The package is a transitive dependency in thousands of enterprise applications.',date:new Date().toISOString(),source:'Checkmarx Zero',tier:1},
-  {id:'m5',title:'CISOs Report AI-Generated Code Creating Unmanageable SAST Alert Volumes',link:'#',summary:'A survey of 400 enterprise CISOs reveals AI-assisted development tools are generating code at a pace existing SAST tooling cannot manage. Alert volumes increased 340 percent in eighteen months while security headcount remained flat.',date:new Date().toISOString(),source:'CSO Online',tier:1},
-  {id:'m6',title:'SSRF in Cloud-Native Architectures Bypassing IMDSv2 Protections',link:'#',summary:'Researchers demonstrated techniques for bypassing AWS IMDSv2 protections via SSRF in containerised workloads, exploiting quirks in how HTTP clients handle hop-by-hop headers in service mesh configurations.',date:new Date().toISOString(),source:'Dark Reading',tier:1},
-  {id:'m7',title:'Trail of Bits Audit Finds Critical Logic Flaws in Widely Used Cryptography Library',link:'#',summary:'An independent audit of a widely deployed cryptography library uncovered logic flaws in key derivation functions affecting confidentiality guarantees. The library has over 12 million downloads per month.',date:new Date().toISOString(),source:'Trail of Bits',tier:2},
-  {id:'m8',title:'GitHub Security Lab Reports 30 Percent Increase in Malicious Dependency Confusion Attacks',link:'#',summary:'Dependency confusion attacks have increased sharply as attackers automate namespace squatting across npm, PyPI, and RubyGems. Enterprise package registries without scope enforcement are the primary target.',date:new Date().toISOString(),source:'GitHub Security Lab',tier:2},
-];
 
-// ── Fetch all sources ─────────────────────────────────────────
-async function fetchAll(){
-  STATE.fetchStatus='fetching';STATE.fetchLog=[];STATE.articles=[];render();
-  const results=await Promise.allSettled(ALL_SOURCES.map(src=>fetchSource(src)));
-  let live=[];
-  results.forEach((r,i)=>{
-    const src=ALL_SOURCES[i];
-    if(r.status==='fulfilled'&&r.value.length){live=live.concat(r.value);STATE.fetchLog.push({name:src.name,tier:src.tier,count:r.value.length,ok:true});}
-    else STATE.fetchLog.push({name:src.name,tier:src.tier,count:0,ok:false});
+async function loadPovs(){
+  if (!STATE.account) return;
+  STATE.loading = true; STATE.loadError = null; render();
+  try {
+    const token = await getGraphToken();
+    const sp = CONFIG.sharepoint;
+    const site = await graphGet(`/sites/${sp.siteHost}:${sp.sitePath}`, token);
+    const list = await graphGet(
+      `/sites/${site.id}/lists/${encodeURIComponent(sp.listName)}/items?expand=fields&$top=200`,
+      token
+    );
+    const fm = sp.fieldMap;
+    STATE.povs = (list.value || []).map(item => {
+      const f = item.fields || {};
+      return {
+        id:           String(item.id),
+        title:        f[fm.title]        || '(untitled)',
+        customer:     f[fm.customer]     || '',
+        status:       f[fm.status]       || '',
+        startDate:    f[fm.startDate]    || '',
+        endDate:      f[fm.endDate]      || '',
+        cxOneRegion:  (f[fm.cxOneRegion] || '').toLowerCase(),
+        cxOneTenant:  f[fm.cxOneTenant]  || '',
+        ownerEmail:   f[fm.ownerEmail]   || '',
+        surveyFormUrl:f[fm.surveyFormUrl]|| ''
+      };
+    });
+    STATE.lastSync = new Date();
+  } catch (e){
+    STATE.loadError = e.message || String(e);
+    toast('SharePoint load failed: ' + STATE.loadError, true);
+  } finally {
+    STATE.loading = false;
+    render();
+  }
+}
+
+// ── Checkmarx One client ────────────────────────────────────────
+async function exchangeApiKey(region, tenant, apiKey){
+  const r = CONFIG.cxOne.regions[region];
+  if (!r) throw new Error('Unknown region: ' + region);
+  const body = new URLSearchParams({
+    grant_type:    'refresh_token',
+    client_id:     'ast-app',
+    refresh_token: apiKey
   });
-  // Deduplicate
-  const seen=new Set();
-  live=live.filter(a=>{const k=a.title.toLowerCase().slice(0,50);if(seen.has(k))return false;seen.add(k);return true;});
-  // Score
-  live=live.map(a=>({...a,scores:scoreArticle(a)}));
-  // Fallback
-  if(live.length<4){
-    const mocked=MOCK_ARTICLES.map(a=>({...a,scores:scoreArticle(a),isMock:true}));
-    live=[...live,...mocked];
-    STATE.fetchLog.push({name:'Curated fallback',tier:0,count:mocked.length,ok:true});
+  const res = await fetch(`${r.iam}/auth/realms/${encodeURIComponent(tenant)}/protocol/openid-connect/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+  if (!res.ok) throw new Error(`Token exchange ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.access_token;
+}
+
+function classifyOrigin(scan){
+  // Cx One scan objects expose initiator + source-type that map to broad categories
+  const origin = (scan.origin || scan.initiator || scan.sourceType || '').toString().toLowerCase();
+  if (origin.includes('cli'))                       return 'CLI';
+  if (origin.includes('ide') || origin.includes('vscode') || origin.includes('intellij') || origin.includes('jetbrains') || origin.includes('eclipse')) return 'IDE';
+  if (origin.includes('github'))                    return 'GitHub';
+  if (origin.includes('gitlab'))                    return 'GitLab';
+  if (origin.includes('jenkins'))                   return 'Jenkins';
+  if (origin.includes('azure') || origin.includes('ado') || origin.includes('devops')) return 'Azure DevOps';
+  if (origin.includes('bitbucket'))                 return 'Bitbucket';
+  if (origin.includes('cxflow'))                    return 'CxFlow';
+  if (origin.includes('api'))                       return 'API';
+  if (origin.includes('ui') || origin.includes('web') || origin.includes('manual')) return 'Web UI';
+  return origin ? origin : 'Other';
+}
+
+async function getScanOrigins(region, jwt){
+  const r = CONFIG.cxOne.regions[region];
+  const res = await fetch(`${r.api}/api/scans/?limit=200&offset=0`, {
+    headers: { Authorization: 'Bearer ' + jwt, Accept: 'application/json' }
+  });
+  if (!res.ok) throw new Error(`Scans ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const scans = data.scans || data.items || [];
+  const counts = {};
+  let total = 0, latest = null;
+  for (const s of scans){
+    const k = classifyOrigin(s);
+    counts[k] = (counts[k] || 0) + 1;
+    total++;
+    const t = s.createdAt || s.updatedAt;
+    if (t && (!latest || t > latest)) latest = t;
   }
-  live.sort((a,b)=>b.scores.total-a.scores.total);
-  STATE.articles=live;STATE.lastFetch=new Date();STATE.fetchStatus='done';STATE.filter='All';render();
+  counts.total = total;
+  return { counts, latest };
 }
 
-// ── Build ChatGPT Prompt ──────────────────────────────────────
-function buildPrompt(a){
-  const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  const s=a.scores;
-  return `=== APPSEC THOUGHT LEADERSHIP ENGINE ===
-Date: ${today}
-Source: ${a.source} (Tier ${a.tier}) | Cluster: ${s.cluster}
-Article Score: ${s.total}/100 | Novelty: ${s.novelty} | Exec Relevance: ${s.execRelevance} | Discussion Potential: ${s.discussionPotential} | Defensibility: ${s.defensibility}
-
-ARTICLE INPUT:
-Title: ${a.title}
-URL: ${a.link||'Not available'}
-Summary: ${a.summary||'No summary available. Work from the title and your own knowledge of this topic area.'}
-
----
-
-WHO I AM:
-I am a senior AppSec and security leader. My audience is CISOs, AppSec leaders, engineering leaders, and enterprise security buyers. I am not a journalist. I am not a vendor. I am not an analyst. I am an operator who has worked in this space and has earned the right to take positions.
-
-MY WRITING STYLE — FOLLOW THIS EXACTLY:
-- Executive, sharp, credible, slightly provocative
-- No emojis anywhere in any section
-- No exclamation marks
-- No hashtags unless I explicitly ask for them
-- Short to medium sentences. Dense with meaning.
-- Confident but not arrogant
-- Take a clear position. Never sit on the fence.
-- Connect technical detail to business consequence in every paragraph
-- Sound like someone who has operated in this space for years, not someone who read about it this morning
-- Optimize for intelligent disagreement, not rage bait
-- The goal is credible tension, defensible contrarian framing, and reactions from practitioners who either strongly agree or push back with substance
-
-BANNED PHRASES — DO NOT USE ANY OF THESE UNDER ANY CIRCUMSTANCES:
-"in today's rapidly evolving landscape", "it is important to note", "at the end of the day", "game changer", "journey" as a metaphor, "leverage" as a buzzword, "paradigm shift", "moving forward", "exciting", "innovative", "cutting-edge", "best-in-class", "robust", "seamless", "holistic", "synergy", "it goes without saying", "needless to say", "as we all know", "the bottom line is", "in conclusion", "in summary", "to summarize", "I believe that", "it's worth noting"
-
-WHAT TO AVOID:
-- Rage bait, misinformation, forced controversy, personal attacks
-- Tribal or sensational framing, fabricated facts, unsupported claims
-- Watered-down safe writing that offends no one and moves no one
-- Summarizing the article instead of leading with a genuine position
-
-WHAT TO ACHIEVE:
-- Intelligent disagreement in the comments
-- Reactions from practitioners and security leaders
-- People who agree strongly or push back with real substance
-- A post that is worth reading twice and worth sharing
-
----
-
-WORK THROUGH EACH STEP IN SEQUENCE. SHOW YOUR FULL REASONING FOR EACH STEP.
-
----
-
-STEP 4 — SYNTHESIZE
-
-Produce a concise editorial briefing:
-- What is actually happening or being claimed — not what the article says but what is really going on
-- Why it matters technically to AppSec practitioners right now
-- Why it matters commercially or operationally — the business consequence, not the theoretical risk
-- What most people reading this are missing or underestimating
-- What a CISO, AppSec head, or engineering leader should pay attention to — from your perspective as an experienced operator, not from the article's perspective
-- Search your knowledge for related developments, CVEs, breaches, regulatory changes, or industry shifts from the past 30 days relevant to this topic. Bring them in to enrich the briefing.
-
----
-
-STEP 5 — OBJECT TO ITSELF
-
-Before writing a single word of the post, attack your own analysis from Step 4. This is the most important step. Be brutal.
-
-Work through each of these seven challenges:
-1. The single strongest counterargument a practitioner with 20 years of experience would raise — specific, not generic
-2. What makes this take potentially weak, shallow, biased, or overstated
-3. What an experienced CISO would specifically push back on and why
-4. What a practitioner in the field would say is missing from the analysis
-5. Whether this take is too obvious — something anyone paying attention already knows
-6. Whether this sounds vendor-adjacent, like it is implicitly selling something or benefiting a vendor narrative
-7. Whether this is summarizing the article rather than leading with a genuinely independent position
-
-Then rewrite the synthesis from Step 4 to address every objection you raised. The revised version must be noticeably stronger, more specific, and more defensible than the original.
-
----
-
-STEP 6 — SIMULATE COMMENT REACTIONS
-
-Simulate exactly 8 realistic LinkedIn comments from these personas. Each comment must sound like a real professional wrote it — specific, grounded in operational experience, and credible. None should be cartoonish, generic, or use phrases like "great post" or "thanks for sharing."
-
-1. SUPPORTIVE CISO — agrees and adds a specific real-world operational detail from their own experience that strengthens the argument
-2. SKEPTICAL APPSEC ENGINEER — technically sharp, questions whether the framing holds up in practice with a specific technical objection
-3. CYNICAL PRACTITIONER — has seen this exact problem before, is tired of it being treated as new or surprising, references a specific prior incident
-4. DEVELOPER TEAM LEAD — responds from the perspective of someone who owns code delivery and is skeptical of security narratives that ignore engineering reality
-5. CLOUD SECURITY ARCHITECT — challenges or extends the argument with a specific cloud-native or infrastructure angle
-6. VENDOR-FATIGUED ENTERPRISE BUYER — skeptical of another vendor-adjacent narrative, asks for specific evidence or data before acting on it
-7. TECHNICALLY SHARP CRITIC — finds a specific flaw in the argument or the evidence, challenges the logic or the data
-8. EXECUTIVE SEEKING CLARITY — does not want technical depth, wants a clear answer to: what does this mean for the business and what is the one action to take
-
-Rules:
-- At least 3 comments must disagree substantively with the post
-- At least 2 must question whether the take is truly new or the evidence is sufficient
-- No comment should be fewer than 2 sentences
-- Each comment must be specific to the topic, not generic security commentary
-
----
-
-STEP 7 — IMPROVE AFTER FEEDBACK
-
-Read all 8 simulated comments. Use them to produce a stronger version of the post.
-
-Specifically do the following:
-- Remove any phrase or claim the cynical practitioner or technical critic would dismiss
-- Tighten the opening line based on what the executive and the CISO responded to most strongly
-- Address the most credible pushback without backing down from the core position
-- Add one specific technical or operational detail that the skeptical engineer implicitly asked for
-- Make the business consequence one sentence clearer based on what the executive asked
-- Ensure the final post is more defensible than the first draft while remaining equally bold
-
----
-
-STEP 8 — FINAL OUTPUT
-
-Produce the following sections in order, clearly labeled with the headers below.
-
-## PUNCHLINE
-One line only. Crisp, memorable, executive-grade. This is the opening line of the LinkedIn post. It must make a security professional stop scrolling. It must not be a question. It must not be a generic observation. It must state something specific, counterintuitive, or provocative that only someone with real expertise would say.
-
-## EXECUTIVE SUMMARY
-3 to 5 bullet points. What is happening and why it matters. Each bullet must add information the previous one did not. No filler. No repetition.
-
-## FIRST DRAFT
-A 2-3 paragraph post in my voice. Apply all voice and style rules. This is the unrefined version.
-
-## SELF-OBJECTION SUMMARY
-3-5 lines summarizing the strongest criticisms from Step 5 and exactly how the revised version addresses each one.
-
-## SIMULATED COMMENTS
-All 8 comments labeled by persona name.
-
-## IMPROVED FINAL POST
-The revised 2-3 paragraph version incorporating all Step 7 improvements. This is the version I will post to LinkedIn. It must be noticeably stronger than the first draft. Apply all voice rules without exception. No emojis. No exclamation marks. No banned phrases. Take a position and defend it.
-
-## ALTERNATE HOOKS
-5 alternative opening lines for the same post. Each must take a different angle from the others and from the main punchline. Label each: contrarian, cautionary, strategic, operational, or technical-to-business.
-
-## POSITIONING ANGLE
-Label the final post as exactly one of:
-contrarian | cautionary | strategic | operational | technical-to-business | CISO dilemma | developer-risk | governance-first
-
-Write one sentence explaining why this label fits.
-
-## ENGAGEMENT SCORE
-Rate the improved final post from 1 to 100 across these six dimensions. Show the score and a one-sentence justification for each.
-- Credibility
-- Novelty
-- Clarity
-- Executive Relevance
-- Discussion Potential
-- Defensibility
-
-## SOURCE REFERENCES
-List every article, report, or source used in producing this output. Include the URL where available. Write one sentence explaining how each source informed the analysis or the post.
-
----
-
-FINAL INSTRUCTION BEFORE YOU BEGIN:
-Do not sound like a journalist. Do not sound like a marketer. Do not sound like an AI assistant that has summarized a news article and added generic commentary. Sound like a seasoned security leader with a considered, independently formed opinion who is not afraid to defend it under scrutiny. The improved final post must be worth posting to LinkedIn without a heavy manual rewrite. It must take a position. It must survive criticism from experienced practitioners. It must invite meaningful debate from people who know what they are talking about.`;
-}
-
-// ── Share to ChatGPT ──────────────────────────────────────────
-async function sendToChatGPT(){
-  if(!STATE.selected)return;
-  const prompt=buildPrompt(STATE.selected);
-  try{await navigator.clipboard.writeText(prompt);}catch(e){}
-  if(navigator.share){
-    try{await navigator.share({title:'AppSec Post Prompt',text:prompt});return;}
-    catch(e){if(e.name==='AbortError')return;}
+async function refreshPovScans(pov){
+  const local = getLocal(pov.id);
+  if (!local.apiKey) return;
+  const region = local.cxOneRegion || pov.cxOneRegion;
+  const tenant = local.cxOneTenant || pov.cxOneTenant;
+  if (!region || !tenant){ toast('Missing region or tenant for ' + pov.title, true); return; }
+  try {
+    const jwt = await exchangeApiKey(region, tenant, local.apiKey);
+    const { counts, latest } = await getScanOrigins(region, jwt);
+    setLocal(pov.id, { scanOriginsCache: counts, lastScanAt: latest, lastFetched: new Date().toISOString() });
+    toast('Refreshed ' + pov.title);
+  } catch (e){
+    toast('Refresh failed: ' + (e.message || e), true);
   }
-  window.open('https://chat.openai.com/','_blank');
-  showToast('Prompt copied to clipboard');
-}
-
-async function copyPrompt(){
-  if(!STATE.selected)return;
-  try{await navigator.clipboard.writeText(buildPrompt(STATE.selected));showToast('Prompt copied to clipboard');}
-  catch(e){showToast('Copy failed — use Send to ChatGPT instead');}
-}
-
-function showToast(msg){
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2500);
-}
-
-// ── Render helpers ────────────────────────────────────────────
-function scoreColor(n){return n>=75?'#22c55e':n>=55?'#f59e0b':'#ef4444';}
-function timeAgo(ds){
-  if(!ds)return'';const d=new Date(ds);if(isNaN(d))return'';
-  const diff=(Date.now()-d)/1000;
-  if(diff<3600)return Math.round(diff/60)+'m ago';
-  if(diff<86400)return Math.round(diff/3600)+'h ago';
-  return Math.round(diff/86400)+'d ago';
-}
-function tierTag(t){
-  if(t===1)return'<span class="tag tag-t1">T1 Primary</span>';
-  if(t===2)return'<span class="tag tag-t2">T2 Secondary</span>';
-  return'<span class="tag tag-t3">T3 Tertiary</span>';
-}
-function scoreBar(label,val){
-  return`<div class="score-row"><span class="score-label">${label}</span><div class="score-bar"><div class="score-fill" style="width:${val}%;background:${scoreColor(val)}"></div></div><span class="score-num">${val}</span></div>`;
-}
-
-// ── Tab: Feed ─────────────────────────────────────────────────
-function renderFeed(){
-  const clusters=['All',...new Set(STATE.articles.map(a=>a.scores&&a.scores.cluster).filter(Boolean))];
-  const filtered=STATE.filter==='All'?STATE.articles:STATE.articles.filter(a=>a.scores&&a.scores.cluster===STATE.filter);
-
-  let statusHtml='';
-  if(STATE.fetchStatus==='idle'){
-    statusHtml=`<div class="status-row"><div class="dot dot-amber"></div><span>Not yet fetched. Tap below to load articles from all 26 sources.</span></div>`;
-  }else if(STATE.fetchStatus==='fetching'){
-    statusHtml=`<div class="status-row"><div class="dot dot-green dot-pulse"></div><span>Fetching from ${ALL_SOURCES.length} sources across 3 tiers...</span></div>`;
-  }else if(STATE.fetchStatus==='done'){
-    const live=STATE.fetchLog.filter(l=>l.ok).length;
-    const ts=STATE.lastFetch?STATE.lastFetch.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-    statusHtml=`<div class="status-row"><div class="dot dot-green"></div><span>${STATE.articles.length} articles scored · ${live}/${ALL_SOURCES.length} sources live · ${ts}</span><button class="btn btn-ghost btn-sm" style="margin-left:auto;flex-shrink:0" onclick="fetchAll()">Refresh</button></div>`;
-  }else{
-    statusHtml=`<div class="status-row"><div class="dot dot-red"></div><span>Fetch failed. Showing curated fallback articles.</span><button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="fetchAll()">Retry</button></div>`;
-  }
-
-  let filtersHtml='';
-  if(STATE.articles.length>0){
-    filtersHtml=`<div class="filter-row">${clusters.map(c=>`<button class="filter-btn ${STATE.filter===c?'active':''}" onclick="setFilter('${c}')">${c}</button>`).join('')}</div>`;
-  }
-
-  let articlesHtml='';
-  if(STATE.fetchStatus==='idle'){
-    articlesHtml=`<div class="empty"><div class="empty-icon">◎</div><h3>No articles loaded</h3><p>Fetch articles from all 26 configured sources. Each article is scored across 7 dimensions and ranked by thought leadership potential.</p><br><button class="btn btn-primary" onclick="fetchAll()">Fetch Latest Articles</button></div>`;
-  }else if(STATE.fetchStatus==='fetching'){
-    articlesHtml=`<div class="empty"><div class="empty-icon" style="animation:spin 2s linear infinite;display:inline-block">◌</div><h3>Fetching and scoring...</h3><p>Pulling from all 3 tiers in parallel</p></div>`;
-  }else if(filtered.length===0){
-    articlesHtml=`<div class="empty"><div class="empty-icon">◎</div><h3>No articles in this cluster</h3><p>Try a different filter or refresh.</p></div>`;
-  }else{
-    articlesHtml=filtered.map(a=>{
-      const isSel=STATE.selected&&STATE.selected.id===a.id;
-      return`<div class="card ${isSel?'article-selected':''}" onclick="selectArticle('${a.id}')">
-        <div class="card-header">
-          <div class="card-title">${a.title}</div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">
-            <span style="font-size:22px;font-weight:800;color:${scoreColor(a.scores.total)}">${a.scores.total}</span>
-            <span style="font-size:10px;color:var(--muted)">/100</span>
-          </div>
-        </div>
-        <div class="card-meta">
-          ${tierTag(a.tier)}
-          <span class="tag tag-cluster">${a.scores.cluster}</span>
-          <span style="font-size:11px;color:var(--muted)">${a.source}</span>
-          ${a.isMock?'<span class="tag tag-mock">Curated</span>':''}
-          ${a.date?`<span style="font-size:11px;color:var(--muted)">${timeAgo(a.date)}</span>`:''}
-        </div>
-        <div class="card-summary">${a.summary?(a.summary.slice(0,180)+(a.summary.length>180?'...':'')):''}</div>
-        ${scoreBar('Novelty',a.scores.novelty)}
-        ${scoreBar('Exec Relevance',a.scores.execRelevance)}
-        ${scoreBar('Discussion',a.scores.discussionPotential)}
-        ${scoreBar('Defensibility',a.scores.defensibility)}
-        ${isSel?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-green btn-sm" onclick="event.stopPropagation();showTab('workbench')">Open in Workbench →</button>
-          ${a.link&&a.link!=='#'?`<a href="${a.link}" target="_blank" class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Read Article ↗</a>`:''}
-        </div>`:''}
-      </div>`;
-    }).join('');
-  }
-
-  return statusHtml+filtersHtml+articlesHtml;
-}
-
-// ── Tab: Workbench ────────────────────────────────────────────
-function renderWorkbench(){
-  if(!STATE.selected){
-    return`<div class="empty"><div class="empty-icon">◎</div><h3>No article selected</h3><p>Go to the Feed tab, find the highest-scoring article, and tap it to select. Then return here to generate your post.</p><br><button class="btn btn-primary" onclick="showTab('feed')">Go to Feed</button></div>`;
-  }
-  const a=STATE.selected;const s=a.scores;
-  const prompt=buildPrompt(a);
-  return`<div class="workbench">
-    <h2>${a.title}</h2>
-    <div class="subtitle">${a.source} · ${s.cluster} · Overall score: <strong style="color:${scoreColor(s.total)}">${s.total}/100</strong></div>
-    <div class="scores-grid">
-      ${[['Novelty',s.novelty],['Relevance',s.relevance],['Exec Relevance',s.execRelevance],['Tech Depth',s.techDepth],['Biz Consequence',s.businessConsequence],['Discussion',s.discussionPotential]].map(([l,v])=>`<div class="score-item"><div class="score-item-label">${l}</div><div class="score-item-val" style="color:${scoreColor(v)}">${v}</div></div>`).join('')}
-    </div>
-    ${a.summary?`<div style="margin-top:16px"><div class="section-label">Summary</div><p style="font-size:13px;color:var(--muted);line-height:1.6">${a.summary}</p></div>`:''}
-    ${a.link&&a.link!=='#'?`<div style="margin-top:12px"><a href="${a.link}" target="_blank" class="btn btn-ghost btn-sm">Read Original Article ↗</a></div>`:''}
-    <div style="margin-top:20px">
-      <div class="section-label">ChatGPT Prompt — Full 5-Step Editorial Workflow</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5">This prompt runs Steps 4-8: synthesize, object to itself, simulate 8 audience reactions, improve, then produce punchline + executive summary + first draft + improved final post + alternate hooks + positioning angle + engagement score + source references.</p>
-      <div class="prompt-box">${prompt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-    </div>
-    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
-      <button class="btn btn-green btn-full" onclick="sendToChatGPT()" style="font-size:15px;padding:14px">Send to ChatGPT via Share Sheet</button>
-      <button class="btn btn-ghost btn-full" onclick="copyPrompt()">Copy Prompt to Clipboard</button>
-    </div>
-    <div class="share-steps">
-      <p style="font-weight:600;color:var(--text);margin-bottom:10px;font-size:13px">How this works on your Samsung</p>
-      <div class="share-step"><div class="step-num">1</div><span>Tap Send to ChatGPT. Android Share Sheet appears. Select ChatGPT from the list.</span></div>
-      <div class="share-step"><div class="step-num">2</div><span>If ChatGPT is not in the share list, open the ChatGPT app once manually then return here.</span></div>
-      <div class="share-step"><div class="step-num">3</div><span>ChatGPT receives the full prompt. Hit Send. It works through all 5 steps and shows all output.</span></div>
-      <div class="share-step"><div class="step-num">4</div><span>Scroll to the Improved Final Post section. Copy it. Paste directly into LinkedIn.</span></div>
-      <div class="share-step"><div class="step-num">5</div><span>Use the Image Generation Prompt in ChatGPT's image tab to generate your visual in the same session.</span></div>
-    </div>
-    <div style="margin-top:16px"><button class="btn btn-ghost btn-full" onclick="showTab('feed')">← Back to Feed</button></div>
-  </div>`;
-}
-
-// ── Tab: Sources ──────────────────────────────────────────────
-function renderSources(){
-  const logMap={};STATE.fetchLog.forEach(l=>{logMap[l.name]=l;});
-  const tiers=[
-    {label:'Primary Sources',desc:'Tier 1 — Score bonus +12. Deep technical research, independent security journalism, and foundational AppSec knowledge bases.',sources:PRIMARY_SOURCES,tagClass:'tag-t1'},
-    {label:'Secondary Sources',desc:'Tier 2 — Score bonus +6. Practitioner research, specialist vendor-independent blogs, and engineering-focused security analysis.',sources:SECONDARY_SOURCES,tagClass:'tag-t2'},
-    {label:'Tertiary Sources',desc:'Tier 3 — No bonus. Broad industry coverage for volume, trend detection, and mainstream security news.',sources:TERTIARY_SOURCES,tagClass:'tag-t3'},
-  ];
-  return`<div class="card" style="margin-bottom:16px">
-    <div class="section-label" style="margin-bottom:6px">Source Configuration — ${ALL_SOURCES.length} sources across 3 tiers</div>
-    <p style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:10px">All sources are fetched in parallel on every refresh. Tier 1 sources receive the highest score bonus so high-quality research naturally surfaces above mainstream news when raw content scores are equal. Checkmarx Zero is your anchor source.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <span class="tag tag-t1">Tier 1 — ${PRIMARY_SOURCES.length} sources (+12)</span>
-      <span class="tag tag-t2">Tier 2 — ${SECONDARY_SOURCES.length} sources (+6)</span>
-      <span class="tag tag-t3">Tier 3 — ${TERTIARY_SOURCES.length} sources</span>
-    </div>
-  </div>
-  ${tiers.map(ts=>`<div class="card" style="margin-bottom:12px">
-    <div class="section-label" style="margin-bottom:4px">${ts.label}</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">${ts.desc}</p>
-    ${ts.sources.map(src=>{
-      const log=logMap[src.name];
-      const status=!log?'Not fetched':log.ok?`${log.count} articles`:'Failed';
-      const statusColor=!log?'var(--muted)':log.ok?'var(--green)':'var(--amber)';
-      return`<div class="source-row"><div class="source-info"><h4>${src.name}</h4></div><span class="source-status" style="color:${statusColor}">${status}</span></div>`;
-    }).join('')}
-  </div>`).join('')}
-  <button class="btn btn-primary btn-full" style="margin-top:4px" onclick="fetchAll()">Refresh All ${ALL_SOURCES.length} Sources</button>
-  <div class="card" style="margin-top:16px">
-    <div class="section-label" style="margin-bottom:10px">Scoring Dimensions</div>
-    ${[['Novelty','Is this new, surprising, or not yet widely discussed in the industry?'],['AppSec Relevance','How directly does this relate to application security practice?'],['Executive Relevance','Would a CISO, board member, or enterprise buyer care?'],['Technical Depth','Is there real substance beneath the headline?'],['Business Consequence','Is there a clear commercial or operational impact?'],['Discussion Potential','Will this generate meaningful professional debate among practitioners?'],['Defensibility','Can a strong position be taken without misinformation risk?']].map(([l,d])=>`<div style="margin-bottom:12px"><div style="font-size:13px;font-weight:600;color:var(--text)">${l}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${d}</div></div>`).join('')}
-  </div>`;
-}
-
-// ── Router ────────────────────────────────────────────────────
-function showTab(tab){
-  STATE.tab=tab;
-  document.querySelectorAll('nav button').forEach((b,i)=>{b.classList.toggle('active',['feed','workbench','sources'][i]===tab);});
   render();
 }
-function setFilter(f){STATE.filter=f;render();}
-function selectArticle(id){
-  const a=STATE.articles.find(x=>x.id===id);if(!a)return;
-  STATE.selected=STATE.selected&&STATE.selected.id===id?null:a;render();
+
+// ── Bucketing ───────────────────────────────────────────────────
+function povsForTab(tab){
+  const sv = CONFIG.sharepoint.statusValues;
+  return STATE.povs.filter(p => {
+    const local = getLocal(p.id);
+    const hasKey = !!local.apiKey;
+    if (tab === 'monitoring') return hasKey;
+    if (tab === 'survey')     return p.status === sv.completed;
+    // main
+    return (p.status === sv.planned || p.status === sv.inProgress) && !hasKey;
+  });
 }
+
+// ── Rendering ───────────────────────────────────────────────────
+const $main = document.getElementById('main');
+const $userInfo = document.getElementById('userInfo');
+
 function render(){
-  const el=document.getElementById('main-content');
-  if(STATE.tab==='feed')el.innerHTML=renderFeed();
-  else if(STATE.tab==='workbench')el.innerHTML=renderWorkbench();
-  else if(STATE.tab==='sources')el.innerHTML=renderSources();
+  // Tab counts
+  document.getElementById('cnt-main').textContent       = povsForTab('main').length;
+  document.getElementById('cnt-monitoring').textContent = povsForTab('monitoring').length;
+  document.getElementById('cnt-survey').textContent     = povsForTab('survey').length;
+
+  // User info
+  if (STATE.account){
+    $userInfo.innerHTML = `
+      <span>Signed in: <strong>${esc(STATE.account.username)}</strong></span>
+      <button class="btn btn-ghost btn-sm" onclick="signOut()">Sign out</button>`;
+  } else {
+    $userInfo.innerHTML = '';
+  }
+
+  // Active nav
+  document.querySelectorAll('nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === STATE.tab);
+  });
+
+  // Body
+  if (configIsPlaceholder()){
+    $main.innerHTML = `
+      <div class="config-warn">
+        <strong>Configuration required.</strong> Edit the <code>CONFIG</code> block at the top of <code>index.html</code>:
+        set your Azure AD <code>clientId</code> and <code>tenantId</code>, your SharePoint <code>siteHost</code>/<code>sitePath</code>,
+        the list name, and the field-name map for your POV columns. Then reload.
+      </div>` + signinScreen();
+    return;
+  }
+
+  if (!STATE.account){ $main.innerHTML = signinScreen(); return; }
+
+  if (STATE.loading){
+    $main.innerHTML = `
+      <div class="status-row"><span class="dot dot-amber dot-pulse"></span><span>Loading POVs from SharePoint…</span></div>`;
+    return;
+  }
+
+  let html = statusRow();
+  if (STATE.tab === 'main')        html += renderMain();
+  else if (STATE.tab === 'monitoring') html += renderMonitoring();
+  else                              html += renderSurvey();
+  $main.innerHTML = html;
 }
 
-// ── Init ──────────────────────────────────────────────────────
-render();
+function signinScreen(){
+  return `
+    <div class="signin-screen">
+      <div style="font-size:48px">🛡️</div>
+      <h2>Sign in to view POVs</h2>
+      <p>Authenticate with your work account to read the SharePoint POV list and start tracking.</p>
+      <button class="btn btn-primary" onclick="signIn()">Sign in with Microsoft</button>
+    </div>`;
+}
+
+function statusRow(){
+  const sync = STATE.lastSync ? STATE.lastSync.toLocaleString() : 'never';
+  return `
+    <div class="status-row">
+      <span class="dot ${STATE.loadError ? 'dot-red' : 'dot-green'}"></span>
+      <span>${STATE.loadError ? 'Error: ' + esc(STATE.loadError) : 'SharePoint synced'}</span>
+      <span class="grow"></span>
+      <span>Last sync: ${esc(sync)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadPovs()">Refresh</button>
+    </div>`;
+}
+
+function renderMain(){
+  const povs = povsForTab('main');
+  if (!povs.length) return emptyState('No planned or in-progress POVs', 'POVs in your SharePoint list with status Planned or In Progress will appear here.');
+  return povs.map(p => mainCard(p)).join('');
+}
+
+function renderMonitoring(){
+  const povs = povsForTab('monitoring');
+  if (!povs.length) return emptyState('No POVs being monitored', 'Add a Checkmarx One API key to a POV from the Main tab to start monitoring scan-origin activity here.');
+  return povs.map(p => monitoringCard(p)).join('');
+}
+
+function renderSurvey(){
+  const povs = povsForTab('survey');
+  if (!povs.length) return emptyState('No completed POVs', 'POVs marked Completed in SharePoint will appear here so you can send the survey and capture the final score.');
+  return povs.map(p => surveyCard(p)).join('');
+}
+
+function emptyState(title, body){
+  return `<div class="empty"><div class="empty-icon">○</div><h3>${esc(title)}</h3><p>${esc(body)}</p></div>`;
+}
+
+function statusTag(status){
+  const sv = CONFIG.sharepoint.statusValues;
+  if (status === sv.planned)    return `<span class="tag tag-planned">Planned</span>`;
+  if (status === sv.inProgress) return `<span class="tag tag-progress">In Progress</span>`;
+  if (status === sv.completed)  return `<span class="tag tag-done">Completed</span>`;
+  return `<span class="tag tag-mock">${esc(status || 'Unknown')}</span>`;
+}
+
+function dateRange(p){
+  if (!p.startDate && !p.endDate) return '';
+  const f = d => d ? new Date(d).toLocaleDateString() : '?';
+  return `${f(p.startDate)} → ${f(p.endDate)}`;
+}
+
+function povDayProgress(p){
+  if (!p.startDate || !p.endDate) return null;
+  const s = new Date(p.startDate), e = new Date(p.endDate), n = new Date();
+  const total = Math.max(1, Math.ceil((e - s) / 86400000));
+  const elapsed = Math.max(0, Math.min(total, Math.ceil((n - s) / 86400000)));
+  return { elapsed, total };
+}
+
+function mainCard(p){
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${esc(p.title)}</div>
+          <div class="card-sub">${esc(p.customer || '—')}</div>
+        </div>
+        ${statusTag(p.status)}
+      </div>
+      <div class="card-meta">
+        ${p.startDate || p.endDate ? `<span class="tag tag-region">${esc(dateRange(p))}</span>` : ''}
+        ${p.cxOneRegion ? `<span class="tag tag-region">Region: ${esc((CONFIG.cxOne.regions[p.cxOneRegion]||{}).label || p.cxOneRegion)}</span>` : ''}
+        ${p.cxOneTenant ? `<span class="tag tag-region">Tenant: ${esc(p.cxOneTenant)}</span>` : ''}
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm" onclick="openApiKeyModal('${p.id}')">Add API key</button>
+        ${p.ownerEmail ? `<a class="btn btn-ghost btn-sm" href="mailto:${esc(p.ownerEmail)}">Contact owner</a>` : ''}
+      </div>
+    </div>`;
+}
+
+function monitoringCard(p){
+  const local = getLocal(p.id);
+  const counts = local.scanOriginsCache || {};
+  const total = counts.total || 0;
+  const cells = Object.entries(counts).filter(([k]) => k !== 'total').map(([k,v]) =>
+    `<div class="origin-cell"><div class="lbl">${esc(k)}</div><div class="val">${v}</div></div>`
+  ).join('') || `<div class="origin-cell" style="grid-column:1/-1"><div class="lbl">No scans yet</div><div class="val" style="font-size:13px;color:var(--muted);font-weight:500">Click Refresh to fetch from Cx One</div></div>`;
+  const prog = povDayProgress(p);
+  const region = local.cxOneRegion || p.cxOneRegion;
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${esc(p.title)}</div>
+          <div class="card-sub">${esc(p.customer || '—')}</div>
+        </div>
+        ${statusTag(p.status)}
+      </div>
+      <div class="card-meta">
+        ${prog ? `<span class="tag tag-region">Day ${prog.elapsed} of ${prog.total}</span>` : ''}
+        ${region ? `<span class="tag tag-region">Region: ${esc((CONFIG.cxOne.regions[region]||{}).label || region)}</span>` : ''}
+        <span class="tag tag-region">Tenant: ${esc(local.cxOneTenant || p.cxOneTenant || '—')}</span>
+        <span class="tag tag-progress">Total scans: ${total}</span>
+      </div>
+      <div class="origins-grid">${cells}</div>
+      <div class="kv" style="margin-top:10px"><span class="k">Last scan</span><span class="v">${esc(local.lastScanAt ? new Date(local.lastScanAt).toLocaleString() : '—')}</span></div>
+      <div class="kv"><span class="k">Last fetched</span><span class="v">${esc(local.lastFetched ? new Date(local.lastFetched).toLocaleString() : '—')}</span></div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-primary btn-sm" onclick="refreshById('${p.id}')">Refresh scans</button>
+        <button class="btn btn-ghost btn-sm" onclick="openApiKeyModal('${p.id}')">Update key</button>
+        <button class="btn btn-danger btn-sm" onclick="removeKey('${p.id}')">Remove key</button>
+      </div>
+    </div>`;
+}
+
+function surveyCard(p){
+  const local = getLocal(p.id);
+  const sent = !!local.surveySent;
+  const score = typeof local.surveyScore === 'number' ? local.surveyScore : null;
+  const formUrl = (p.surveyFormUrl || CONFIG.survey.defaultFormUrl) +
+    (CONFIG.survey.defaultFormUrl.includes('?') ? '&' : '?') +
+    `povId=${encodeURIComponent(p.id)}&customer=${encodeURIComponent(p.customer || '')}`;
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${esc(p.title)}</div>
+          <div class="card-sub">${esc(p.customer || '—')}</div>
+        </div>
+        ${statusTag(p.status)}
+      </div>
+      <div class="card-meta">
+        ${p.startDate || p.endDate ? `<span class="tag tag-region">${esc(dateRange(p))}</span>` : ''}
+        <span class="tag ${sent?'tag-progress':'tag-mock'}">Survey ${sent?'sent':'not sent'}</span>
+        ${local.surveyDate ? `<span class="tag tag-region">Sent: ${esc(new Date(local.surveyDate).toLocaleDateString())}</span>` : ''}
+      </div>
+      ${score !== null ? `
+        <div class="score-display">
+          <div class="num">${score}</div>
+          <div class="bar"><div class="fill" style="width:${Math.max(0,Math.min(100,score))}%"></div></div>
+        </div>` : ''}
+      <div class="btn-row" style="margin-top:10px">
+        <a class="btn btn-primary btn-sm" href="${esc(formUrl)}" target="_blank" rel="noopener">Open survey</a>
+        <button class="btn ${sent?'btn-ghost':'btn-green'} btn-sm" onclick="markSurvey('${p.id}', ${!sent})">${sent?'Mark unsent':'Mark sent'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="openScoreModal('${p.id}')">${score !== null ? 'Update' : 'Enter'} final score</button>
+      </div>
+    </div>`;
+}
+
+// ── Modals ──────────────────────────────────────────────────────
+const $modalRoot = document.getElementById('modalRoot');
+function closeModal(){ $modalRoot.innerHTML = ''; }
+
+function openApiKeyModal(povId){
+  const pov = STATE.povs.find(p => p.id === povId);
+  if (!pov) return;
+  const local = getLocal(povId);
+  const region = local.cxOneRegion || pov.cxOneRegion || 'us';
+  const tenant = local.cxOneTenant || pov.cxOneTenant || '';
+  const regionOpts = Object.entries(CONFIG.cxOne.regions).map(([k,v]) =>
+    `<option value="${k}" ${k===region?'selected':''}>${esc(v.label)} (${esc(k)})</option>`
+  ).join('');
+  $modalRoot.innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h2>Add Checkmarx One API key</h2>
+        <p class="sub">${esc(pov.title)} · ${esc(pov.customer || '—')}</p>
+        <div class="form-row">
+          <label>Region</label>
+          <select id="m_region">${regionOpts}</select>
+        </div>
+        <div class="form-row">
+          <label>Tenant name</label>
+          <input id="m_tenant" value="${esc(tenant)}" placeholder="e.g. acme"/>
+        </div>
+        <div class="form-row">
+          <label>API key (refresh token)</label>
+          <textarea id="m_key" rows="4" placeholder="Paste the refresh-token API key from the customer's Cx One tenant"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveApiKey('${povId}')">Save &amp; fetch</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveApiKey(povId){
+  const region = document.getElementById('m_region').value;
+  const tenant = document.getElementById('m_tenant').value.trim();
+  const apiKey = document.getElementById('m_key').value.trim();
+  if (!tenant || !apiKey){ toast('Tenant and API key are required', true); return; }
+  // Validate by exchanging the key
+  try {
+    const jwt = await exchangeApiKey(region, tenant, apiKey);
+    const { counts, latest } = await getScanOrigins(region, jwt);
+    setLocal(povId, {
+      cxOneRegion: region, cxOneTenant: tenant, apiKey,
+      scanOriginsCache: counts, lastScanAt: latest, lastFetched: new Date().toISOString()
+    });
+    closeModal();
+    STATE.tab = 'monitoring';
+    toast('Key validated and POV moved to Monitoring');
+    render();
+  } catch (e){
+    toast('Could not validate key: ' + (e.message || e), true);
+  }
+}
+
+function removeKey(povId){
+  if (!confirm('Remove the API key for this POV? Local scan data will also be cleared.')) return;
+  clearLocal(povId);
+  toast('API key removed');
+  render();
+}
+
+function refreshById(povId){
+  const pov = STATE.povs.find(p => p.id === povId);
+  if (pov) refreshPovScans(pov);
+}
+
+function openScoreModal(povId){
+  const pov = STATE.povs.find(p => p.id === povId);
+  if (!pov) return;
+  const local = getLocal(povId);
+  const cur = typeof local.surveyScore === 'number' ? local.surveyScore : '';
+  $modalRoot.innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <h2>Final POV score</h2>
+        <p class="sub">Read the value off the survey Excel and enter it below.</p>
+        <div class="form-row">
+          <label>Score (0–100)</label>
+          <input id="m_score" type="number" min="0" max="100" step="1" value="${esc(String(cur))}"/>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveScore('${povId}')">Save</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveScore(povId){
+  const v = parseFloat(document.getElementById('m_score').value);
+  if (isNaN(v) || v < 0 || v > 100){ toast('Enter a number between 0 and 100', true); return; }
+  setLocal(povId, { surveyScore: v });
+  closeModal();
+  toast('Score saved');
+  render();
+}
+
+function markSurvey(povId, sent){
+  setLocal(povId, sent ? { surveySent: true, surveyDate: new Date().toISOString() } : { surveySent: false });
+  render();
+}
+
+// ── Util ────────────────────────────────────────────────────────
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+let toastTimer;
+function toast(msg, isError){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Wire up nav + boot ─────────────────────────────────────────
+document.querySelectorAll('nav button').forEach(b => {
+  b.addEventListener('click', () => { STATE.tab = b.dataset.tab; render(); });
+});
+
+window.addEventListener('focus', () => {
+  // Light auto-refresh of monitoring data when window regains focus
+  if (STATE.tab === 'monitoring' && STATE.account){
+    povsForTab('monitoring').forEach(p => {
+      const local = getLocal(p.id);
+      const stale = !local.lastFetched || (Date.now() - new Date(local.lastFetched).getTime() > 5 * 60 * 1000);
+      if (stale) refreshPovScans(p);
+    });
+  }
+});
+
+// Expose handlers for inline onclick
+Object.assign(window, {
+  signIn, signOut, loadPovs,
+  openApiKeyModal, saveApiKey, removeKey, refreshById,
+  openScoreModal, saveScore, markSurvey, closeModal
+});
+
+(async function boot(){
+  render();                                    // shows config warning or sign-in
+  if (configIsPlaceholder()) return;
+  try {
+    await initMsal();
+    if (STATE.account) await loadPovs();
+  } catch (e){
+    toast('Init error: ' + (e.message || e), true);
+  }
+  render();
+})();
 </script>
 </body>
 </html>
