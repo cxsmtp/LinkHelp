@@ -310,37 +310,62 @@ async function exchangeApiKey(region, tenant, apiKey){
     client_id:     'ast-app',
     refresh_token: apiKey
   });
-  const res = await fetch(`${r.iam}/auth/realms/${encodeURIComponent(tenant)}/protocol/openid-connect/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body
-  });
+  // Tenant is the Keycloak realm name; ast-cli lowercases it before composing the URL.
+  const realm = encodeURIComponent(String(tenant).toLowerCase());
+  let res;
+  try {
+    res = await fetch(`${r.iam}/auth/realms/${realm}/protocol/openid-connect/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+  } catch (e) {
+    throw new Error('Network/CORS error reaching Cx One IAM. The browser may be blocked from calling ' + r.iam + ' directly.');
+  }
   if (!res.ok) throw new Error(`Token exchange ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return data.access_token;
 }
 
 function classifyOrigin(scan){
-  // Cx One scan objects expose initiator + source-type that map to broad categories
-  const origin = (scan.origin || scan.initiator || scan.sourceType || '').toString().toLowerCase();
-  if (origin.includes('cli'))                       return 'CLI';
-  if (origin.includes('ide') || origin.includes('vscode') || origin.includes('intellij') || origin.includes('jetbrains') || origin.includes('eclipse')) return 'IDE';
-  if (origin.includes('github'))                    return 'GitHub';
-  if (origin.includes('gitlab'))                    return 'GitLab';
-  if (origin.includes('jenkins'))                   return 'Jenkins';
-  if (origin.includes('azure') || origin.includes('ado') || origin.includes('devops')) return 'Azure DevOps';
-  if (origin.includes('bitbucket'))                 return 'Bitbucket';
-  if (origin.includes('cxflow'))                    return 'CxFlow';
-  if (origin.includes('api'))                       return 'API';
-  if (origin.includes('ui') || origin.includes('web') || origin.includes('manual')) return 'Web UI';
-  return origin ? origin : 'Other';
+  // Cx One scan object fields (from ast-cli ScanResponseModel):
+  //   sourceOrigin -> CI/CD or IDE name (e.g. "GitHub Action", "Jenkins", "VS Code")
+  //   sourceType   -> "git" | "upload"
+  //   initiator    -> user/service account that triggered it
+  const raw = (scan.sourceOrigin || scan.initiator || scan.sourceType || '').toString().toLowerCase();
+  if (raw.includes('github action') || raw.includes('github-action')) return 'GitHub Action';
+  if (raw.includes('github'))                                         return 'GitHub';
+  if (raw.includes('gitlab'))                                         return 'GitLab';
+  if (raw.includes('bitbucket'))                                      return 'Bitbucket';
+  if (raw.includes('jenkins'))                                        return 'Jenkins';
+  if (raw.includes('azure') || raw.includes('ado') || raw.includes('devops')) return 'Azure DevOps';
+  if (raw.includes('bamboo'))                                         return 'Bamboo';
+  if (raw.includes('circleci') || raw.includes('circle-ci'))          return 'CircleCI';
+  if (raw.includes('teamcity'))                                       return 'TeamCity';
+  if (raw.includes('cxflow'))                                         return 'CxFlow';
+  if (raw.includes('vscode') || raw.includes('vs code'))              return 'VS Code';
+  if (raw.includes('intellij') || raw.includes('jetbrains'))          return 'JetBrains';
+  if (raw.includes('eclipse'))                                        return 'Eclipse';
+  if (raw.includes('visual studio'))                                  return 'Visual Studio';
+  if (raw.includes('ide'))                                            return 'IDE';
+  if (raw.includes('cli'))                                            return 'CLI';
+  if (raw.includes('maven'))                                          return 'Maven';
+  if (raw.includes('gradle'))                                         return 'Gradle';
+  if (raw.includes('api'))                                            return 'API';
+  if (raw.includes('ui') || raw.includes('web') || raw.includes('manual')) return 'Web UI';
+  return raw ? raw : 'Other';
 }
 
 async function getScanOrigins(region, jwt){
   const r = CONFIG.cxOne.regions[region];
-  const res = await fetch(`${r.api}/api/scans/?limit=200&offset=0`, {
-    headers: { Authorization: 'Bearer ' + jwt, Accept: 'application/json' }
-  });
+  let res;
+  try {
+    res = await fetch(`${r.api}/api/scans?limit=200&offset=0`, {
+      headers: { Authorization: 'Bearer ' + jwt, Accept: 'application/json' }
+    });
+  } catch (e) {
+    throw new Error('Network/CORS error reaching Cx One AST. The browser may be blocked from calling ' + r.api + ' directly.');
+  }
   if (!res.ok) throw new Error(`Scans ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const scans = data.scans || data.items || [];
